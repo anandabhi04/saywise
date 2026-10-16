@@ -8,7 +8,7 @@ struct MenuContent: View {
         Text(controller.statusText)
         Divider()
         Button(controller.status == .paused ? "Resume Chirp" : "Pause Chirp") { controller.togglePause() }
-        if controller.needsSetup {
+        if controller.shouldShowSetup {
             Button("Finish setup…") { WindowCoordinator.shared.showSetup() }
         }
         Divider()

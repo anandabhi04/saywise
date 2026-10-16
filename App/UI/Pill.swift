@@ -62,6 +62,7 @@ final class PillPanel: NSPanel {
             contentRect: NSRect(x: 0, y: 0, width: 260, height: 48),
             styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
         isFloatingPanel = true
+        hidesOnDeactivate = false
         level = .statusBar
         backgroundColor = .clear
         isOpaque = false

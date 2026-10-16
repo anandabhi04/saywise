@@ -39,6 +39,7 @@ final class AppController {
     @ObservationIgnored private var loadedEngine: SpeechEngine?
     @ObservationIgnored private var cleaner: MLXCleaner?
     @ObservationIgnored private var loadedCleanerID: String?
+    @ObservationIgnored private var isLoadingModels = false
     @ObservationIgnored private var context = AppContext()
     @ObservationIgnored private var handsFreeTimer: Task<Void, Never>?
 
@@ -75,28 +76,46 @@ final class AppController {
     }
 
     func loadModels() async {
-        do {
-            if transcriber == nil || loadedEngine != settings.speechEngine {
-                modelProgress = 0
-                status = .loadingModels("Downloading and loading the speech model…")
-                transcriber = try await EngineLoader.transcriber(
-                    for: settings.speechEngine, modelsDirectory: paths.modelsDirectory,
-                    progress: { [weak self] p in Task { @MainActor in self?.modelProgress = p } })
-                loadedEngine = settings.speechEngine
+        guard !isLoadingModels else { return }
+        isLoadingModels = true
+        defer { isLoadingModels = false }
+
+        while true {
+            let engine = settings.speechEngine
+            let cleanupModelID = settings.cleanupModelID
+            do {
+                if transcriber == nil || loadedEngine != engine {
+                    modelProgress = 0
+                    status = .loadingModels("Downloading and loading the speech model…")
+                    transcriber = try await EngineLoader.transcriber(
+                        for: engine, modelsDirectory: paths.modelsDirectory,
+                        progress: { [weak self] p in Task { @MainActor in self?.modelProgress = p } })
+                    loadedEngine = engine
+                }
+                if cleaner == nil || loadedCleanerID != cleanupModelID {
+                    modelProgress = 0
+                    status = .loadingModels("Downloading and loading the cleanup model…")
+                    let loaded = try await MLXCleaner.load(
+                        modelID: cleanupModelID, modelsDirectory: paths.modelsDirectory,
+                        progress: { [weak self] p in Task { @MainActor in self?.modelProgress = p } })
+                    await loaded.warmUp()
+                    cleaner = loaded
+                    loadedCleanerID = cleanupModelID
+                }
+                // Settings can change at any await; only become ready for the current pair.
+                if loadedEngine != settings.speechEngine || loadedCleanerID != settings.cleanupModelID {
+                    continue
+                }
+                status = .ready
+                return
+            } catch {
+                if engine != settings.speechEngine || cleanupModelID != settings.cleanupModelID {
+                    continue
+                }
+                status = .failed("Could not load models: \(error.localizedDescription)")
+                WindowCoordinator.shared.showSetup()
+                return
             }
-            if cleaner == nil || loadedCleanerID != settings.cleanupModelID {
-                modelProgress = 0
-                status = .loadingModels("Downloading and loading the cleanup model…")
-                let loaded = try await MLXCleaner.load(
-                    modelID: settings.cleanupModelID, modelsDirectory: paths.modelsDirectory,
-                    progress: { [weak self] p in Task { @MainActor in self?.modelProgress = p } })
-                await loaded.warmUp()
-                cleaner = loaded
-                loadedCleanerID = settings.cleanupModelID
-            }
-            status = .ready
-        } catch {
-            status = .failed("Could not load models: \(error.localizedDescription)")
         }
     }
 
@@ -136,6 +155,7 @@ final class AppController {
     private func startRecording() {
         guard status == .ready else {
             if case .loadingModels = status { pill.flash("Loading models…") }
+            if case .failed = status { pill.flash("Models failed. Open setup.") }
             // The press is ignored, so the next press must start fresh.
             machine = HotkeyStateMachine()
             return
@@ -167,14 +187,19 @@ final class AppController {
         status = .working
         pill.show(.working)
         playSound("Pop")
+        let audioFileName = settings.keepAudio && settings.historyRetention != .off
+            ? try? clipStore.save(samples) : nil
         let input = DictationInput(
             samples: samples, context: context, settings: settings,
-            audioFileName: settings.keepAudio ? try? clipStore.save(samples) : nil)
+            audioFileName: audioFileName)
         let pipeline = DictationPipeline(
             transcriber: transcriber, cleaner: cleaner, inserter: PasteInserter(),
             history: settings.historyRetention == .off ? nil : history)
         Task {
             let outcome = await pipeline.run(input)
+            if case .noSpeech = outcome, let audioFileName {
+                try? FileManager.default.removeItem(at: paths.audioDirectory.appendingPathComponent(audioFileName))
+            }
             finish(outcome)
         }
     }
@@ -221,9 +246,11 @@ final class AppController {
     private func markDictionaryUsed(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
         let now = Date()
-        for index in settings.dictionary.indices where ids.contains(settings.dictionary[index].id) {
-            settings.dictionary[index].lastUsedAt = now
+        var dictionary = settings.dictionary
+        for index in dictionary.indices where ids.contains(dictionary[index].id) {
+            dictionary[index].lastUsedAt = now
         }
+        settings.dictionary = dictionary
     }
 
     private func playSound(_ name: String) {
@@ -280,6 +307,13 @@ final class AppController {
     }
 
     // MARK: - Display
+
+    var shouldShowSetup: Bool {
+        switch status {
+        case .loadingModels, .failed: true
+        default: needsSetup
+        }
+    }
 
     var statusText: String {
         switch status {
