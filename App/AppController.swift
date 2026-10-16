@@ -46,9 +46,9 @@ final class AppController {
     @ObservationIgnored private let clipStore: AudioClipStore
     @ObservationIgnored private let hotkey = HotkeyMonitor()
     @ObservationIgnored private let recorder = AudioRecorder()
-    @ObservationIgnored let pill = PillController()
-    @ObservationIgnored private lazy var floatingButton = FloatingButtonController(controller: self)
+    @ObservationIgnored private(set) lazy var bar = FloatingBarController(controller: self)
     @ObservationIgnored private var machine = HotkeyStateMachine()
+    @ObservationIgnored private var lastHandsFree = false
     @ObservationIgnored private var transcriber: (any Transcriber)?
     @ObservationIgnored private var loadedEngine: SpeechEngine?
     @ObservationIgnored private var cleaner: MLXCleaner?
@@ -71,7 +71,7 @@ final class AppController {
             settingsError = "The settings file was broken. A copy is saved as settings.broken.json. Saywise started with default settings."
         }
         history = try? HistoryStore(path: paths.historyDatabase.path)
-        recorder.onLevel = { [weak self] level in self?.pill.model.push(level) }
+        recorder.onLevel = { [weak self] level in self?.bar.model.push(level) }
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
     }
 
@@ -79,7 +79,7 @@ final class AppController {
 
     func start() {
         hotkey.triggerKey = settings.triggerKey
-        floatingButton.setVisible(settings.showFloatingButton)
+        bar.setVisible(settings.showFloatingButton)
         startHotkeyIfAllowed()
         historyPurgeTimer?.cancel()
         historyPurgeTimer = Task { [weak self] in
@@ -112,6 +112,7 @@ final class AppController {
                 if transcriber == nil || loadedEngine != engine {
                     modelProgress = 0
                     status = .loadingModels("Downloading and loading the speech model…")
+                    bar.rest()
                     transcriber = try await EngineLoader.transcriber(
                         for: engine, modelsDirectory: paths.modelsDirectory,
                         progress: { [weak self] p in Task { @MainActor in self?.modelProgress = p } })
@@ -120,6 +121,7 @@ final class AppController {
                 if cleaner == nil || loadedCleanerID != cleanupModelID {
                     modelProgress = 0
                     status = .loadingModels("Downloading and loading the cleanup model…")
+                    bar.rest()
                     let loaded = try await MLXCleaner.load(
                         modelID: cleanupModelID, modelsDirectory: paths.modelsDirectory,
                         progress: { [weak self] p in Task { @MainActor in self?.modelProgress = p } })
@@ -132,12 +134,14 @@ final class AppController {
                     continue
                 }
                 status = .ready
+                bar.rest()
                 return
             } catch {
                 if engine != settings.speechEngine || cleanupModelID != settings.cleanupModelID {
                     continue
                 }
                 status = .failed("Could not load models: \(error.localizedDescription)")
+                bar.rest()
                 WindowCoordinator.shared.showSetup()
                 return
             }
@@ -156,8 +160,9 @@ final class AppController {
         switch status {
         case .ready: status = .paused
         case .paused: status = .ready
-        default: break
+        default: return
         }
+        bar.rest()
     }
 
     var isMicOn: Bool { status != .paused }
@@ -171,8 +176,8 @@ final class AppController {
         switch status {
         case .recording: stopRecording()
         case .ready: startRecording(from: source)
-        case .loadingModels: pill.flash("Loading models…")
-        case .failed: pill.flash("Models failed. Open setup.")
+        case .loadingModels: bar.flash(.message("Getting ready · \(modelProgressText)", isError: false), for: 2)
+        case .failed: bar.flash(.message("Saywise could not load its models", isError: true), for: 3)
         default: break
         }
     }
@@ -205,19 +210,23 @@ final class AppController {
         case .cancel: cancelRecording()
         case .none: break
         }
+        if status == .recording, lastHandsFree != machine.isHandsFree {
+            lastHandsFree = machine.isHandsFree
+            bar.show(.listening(handsFree: lastHandsFree))
+        }
     }
 
     private func startRecording(from source: RecordingSource) {
         guard status == .ready else {
-            if case .loadingModels = status { pill.flash("Loading models…") }
-            if case .failed = status { pill.flash("Models failed. Open setup.") }
+            if case .loadingModels = status { bar.flash(.message("Getting ready", isError: true), for: 3) }
+            if case .failed = status { bar.flash(.message("Saywise could not load its models", isError: true), for: 3) }
             // The press is ignored, so the next press must start fresh.
             machine = HotkeyStateMachine()
             return
         }
         guard Permission.microphone.isGranted else {
             machine = HotkeyStateMachine()
-            pill.flash("Mic not allowed")
+            bar.flash(.message("Microphone not allowed", isError: true), for: 3)
             WindowCoordinator.shared.showSetup()
             return
         }
@@ -229,12 +238,13 @@ final class AppController {
             try recorder.start()
         } catch {
             machine = HotkeyStateMachine()
-            pill.flash("Mic not available")
+            bar.flash(.message("Microphone not available", isError: true), for: 3)
             return
         }
         status = .recording
         recordingSource = source
-        if source != .window { pill.show(.recording) }
+        lastHandsFree = isHandsFree
+        bar.show(.listening(handsFree: isHandsFree))
         playSound("Tink")
         if source != .hotkey || machine.isHandsFree { scheduleHandsFreeTimeout() }
     }
@@ -247,7 +257,7 @@ final class AppController {
         // A click can stop a hotkey recording, so the key's next press must start fresh.
         machine = HotkeyStateMachine()
         status = .working
-        if source != .window { pill.show(.working) }
+        bar.show(.finishing)
         playSound("Pop")
         let audioFileName = settings.keepAudio && settings.historyRetention != .off
             ? try? clipStore.save(samples) : nil
@@ -280,7 +290,7 @@ final class AppController {
         recorder.cancel()
         status = .ready
         recordingSource = nil
-        pill.hide()
+        bar.rest()
     }
 
     private func finish(_ outcome: DictationOutcome, source: RecordingSource) {
@@ -288,17 +298,19 @@ final class AppController {
         recordingSource = nil
         switch outcome {
         case .noSpeech:
-            if source == .window { pill.flash("No speech heard") } else { pill.hide() }
+            bar.flash(.message("No speech heard", isError: true), for: 3)
         case .transcriptionFailed:
-            pill.flash("Couldn't transcribe")
+            bar.flash(.message("Could not hear you", isError: true), for: 3)
         case let .delivered(result):
             if source == .window {
-                windowText = windowText.isEmpty ? result.finalText : windowText + "\n" + result.finalText
+                windowText = result.finalText
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(result.finalText, forType: .string)
+                bar.flash(.copied, for: 3)
             } else {
                 switch result.insert {
-            case .pasted: pill.hide()
-            case .copiedNoTextField: pill.flash("Copied — no text field")
-            case .copiedNoPermission: pill.flash("Copied — allow Accessibility to paste")
+                case .pasted: bar.flash(.pasted, for: 0.4)
+                case .copiedNoTextField, .copiedNoPermission: bar.flash(.copied, for: 3)
                 }
             }
             markDictionaryUsed(result.usedDictionaryEntryIDs)
@@ -359,7 +371,7 @@ final class AppController {
         }
         if old.launchAtLogin != settings.launchAtLogin { applyLaunchAtLogin() }
         if old.showFloatingButton != settings.showFloatingButton {
-            floatingButton.setVisible(settings.showFloatingButton)
+            bar.setVisible(settings.showFloatingButton)
         }
         if old.historyRetention != settings.historyRetention { Task { await purgeHistory() } }
         let modelsChanged = old.speechEngine != settings.speechEngine || old.cleanupModelID != settings.cleanupModelID
@@ -402,17 +414,34 @@ final class AppController {
         }
     }
 
+    var isHandsFree: Bool { machine.isHandsFree }
+
     var statusText: String {
         switch status {
-        case .starting: "Starting…"
-        case let .loadingModels(message): message
-        case .ready: "Ready — hold \(settings.triggerKey.displayName) to talk"
-        case .recording: "Listening…"
-        case .working: "Working…"
-        case .paused: "Paused"
-        case let .failed(message): message
+        case .starting, .loadingModels: "Getting ready"
+        case .ready: "Ready"
+        case .recording: "Listening"
+        case .working: "Finishing"
+        case .paused: "Mic is off"
+        case .failed: "Needs attention"
         }
     }
+
+    var statusHint: String {
+        status == .ready ? "Hold \(settings.triggerKey.displayName) in any app" : ""
+    }
+
+    var modelProgressText: String {
+        if let bytes = modelBytes, bytes.total > 0 {
+            let f = ByteCountFormatter(); f.countStyle = .file
+            return "\(f.string(fromByteCount: bytes.done)) of \(f.string(fromByteCount: bytes.total))"
+        }
+        return "\(Int((modelProgress * 100).rounded()))%"
+    }
+
+    private(set) var modelBytes: (done: Int64, total: Int64)?
+    var loadingDetail: String { if case let .loadingModels(m) = status { m } else { "" } }
+    var failureDetail: String { if case let .failed(m) = status { m } else { "" } }
 
     var menuBarSymbol: String {
         switch status {
