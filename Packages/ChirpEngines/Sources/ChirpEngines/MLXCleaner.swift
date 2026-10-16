@@ -17,11 +17,24 @@ public final class MLXCleaner: Cleaner {
     ) async throws -> MLXCleaner {
         let hub = HubClient(cache: HubCache(
             cacheDirectory: modelsDirectory.appendingPathComponent("huggingface", isDirectory: true)))
+        guard let repo = Repo.ID(rawValue: modelID) else {
+            throw CocoaError(.fileReadInvalidFileName)
+        }
+        let marker = ".chirp-complete"
+        if let folder = try? await hub.downloadSnapshot(of: repo, localFilesOnly: true),
+           FileManager.default.fileExists(atPath: folder.appendingPathComponent(marker).path) {
+            let container = try await loadModelContainer(
+                from: folder, using: #huggingFaceTokenizerLoader())
+            return MLXCleaner(container: container)
+        }
         let container = try await loadModelContainer(
             from: #hubDownloader(hub),
             using: #huggingFaceTokenizerLoader(),
             configuration: ModelConfiguration(id: modelID),
             progressHandler: { progress($0.fractionCompleted) })
+        // Mark only after weights and tokenizer have loaded successfully.
+        let folder = try await hub.downloadSnapshot(of: repo, localFilesOnly: true)
+        try Data().write(to: folder.appendingPathComponent(marker), options: .atomic)
         return MLXCleaner(container: container)
     }
 
