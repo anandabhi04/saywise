@@ -2,6 +2,7 @@ import AppKit
 import ChirpCore
 import ChirpEngines
 import Observation
+import OSLog
 import ServiceManagement
 
 @MainActor
@@ -28,6 +29,8 @@ final class AppController {
 
     let paths = ChirpPaths.standard
     let history: HistoryStore?
+
+    private static let logger = Logger(subsystem: "dev.chirp.app", category: "dictation")
 
     @ObservationIgnored private let settingsStore: SettingsStore
     @ObservationIgnored private let clipStore: AudioClipStore
@@ -221,10 +224,12 @@ final class AppController {
         Task {
             let outcome = await pipeline.run(input)
             switch outcome {
-            case .noSpeech, .transcriptionFailed:
+            case .noSpeech:
                 if let audioFileName {
                     try? clipStore.delete(fileName: audioFileName)
                 }
+            case let .transcriptionFailed(error):
+                Self.logger.error("Transcription failed: \(error, privacy: .public); audio clip: \(audioFileName ?? "none", privacy: .public)")
             case .delivered:
                 break
             }
