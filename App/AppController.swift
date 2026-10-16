@@ -18,10 +18,20 @@ final class AppController {
         case failed(String)
     }
 
+    /// Where a recording was started. The main window keeps its text; the others paste.
+    enum RecordingSource: Equatable {
+        case hotkey
+        case floatingButton
+        case window
+    }
+
     private(set) var status: Status = .starting
     private(set) var modelProgress: Double = 0
     /// Bumped after each saved dictation so the History window reloads.
     private(set) var historyRevision = 0
+    private(set) var recordingSource: RecordingSource?
+    /// The text box in the main window. Window recordings are added here.
+    var windowText = ""
     var settingsError: String?
     var settings: ChirpSettings {
         didSet { settingsChanged(from: oldValue) }
@@ -37,6 +47,7 @@ final class AppController {
     @ObservationIgnored private let hotkey = HotkeyMonitor()
     @ObservationIgnored private let recorder = AudioRecorder()
     @ObservationIgnored let pill = PillController()
+    @ObservationIgnored private lazy var floatingButton = FloatingButtonController(controller: self)
     @ObservationIgnored private var machine = HotkeyStateMachine()
     @ObservationIgnored private var transcriber: (any Transcriber)?
     @ObservationIgnored private var loadedEngine: SpeechEngine?
@@ -68,6 +79,7 @@ final class AppController {
 
     func start() {
         hotkey.triggerKey = settings.triggerKey
+        floatingButton.setVisible(settings.showFloatingButton)
         startHotkeyIfAllowed()
         historyPurgeTimer?.cancel()
         historyPurgeTimer = Task { [weak self] in
@@ -148,6 +160,23 @@ final class AppController {
         }
     }
 
+    var isMicOn: Bool { status != .paused }
+
+    func setMicOn(_ on: Bool) {
+        if on != isMicOn { togglePause() }
+    }
+
+    /// Click to start, click again to stop. Used by the floating button and the main window.
+    func toggleRecording(from source: RecordingSource) {
+        switch status {
+        case .recording: stopRecording()
+        case .ready: startRecording(from: source)
+        case .loadingModels: pill.flash("Loading models…")
+        case .failed: pill.flash("Models failed. Open setup.")
+        default: break
+        }
+    }
+
     func deleteHistoryEntry(_ entry: HistoryEntry) async {
         guard let history else { return }
         do {
@@ -171,14 +200,14 @@ final class AppController {
 
     private func handle(_ event: HotkeyEvent) {
         switch machine.handle(event) {
-        case .start: startRecording()
+        case .start: startRecording(from: .hotkey)
         case .stop: stopRecording()
         case .cancel: cancelRecording()
         case .none: break
         }
     }
 
-    private func startRecording() {
+    private func startRecording(from source: RecordingSource) {
         guard status == .ready else {
             if case .loadingModels = status { pill.flash("Loading models…") }
             if case .failed = status { pill.flash("Models failed. Open setup.") }
@@ -192,7 +221,10 @@ final class AppController {
             WindowCoordinator.shared.showSetup()
             return
         }
-        context = ContextReader.current()
+        // The main window is in front while it records, so reading the front app would find Saywise.
+        context = source == .window
+            ? AppContext(bundleID: Bundle.main.bundleIdentifier, appName: "Saywise")
+            : ContextReader.current()
         do {
             try recorder.start()
         } catch {
@@ -201,17 +233,21 @@ final class AppController {
             return
         }
         status = .recording
-        pill.show(.recording)
+        recordingSource = source
+        if source != .window { pill.show(.recording) }
         playSound("Tink")
-        if machine.isHandsFree { scheduleHandsFreeTimeout() }
+        if source != .hotkey || machine.isHandsFree { scheduleHandsFreeTimeout() }
     }
 
     private func stopRecording() {
         guard status == .recording, let transcriber, let cleaner else { return }
         handsFreeTimer?.cancel()
         let samples = recorder.stop()
+        let source = recordingSource ?? .hotkey
+        // A click can stop a hotkey recording, so the key's next press must start fresh.
+        machine = HotkeyStateMachine()
         status = .working
-        pill.show(.working)
+        if source != .window { pill.show(.working) }
         playSound("Pop")
         let audioFileName = settings.keepAudio && settings.historyRetention != .off
             ? try? clipStore.save(samples) : nil
@@ -219,7 +255,8 @@ final class AppController {
             samples: samples, context: context, settings: settings,
             audioFileName: audioFileName)
         let pipeline = DictationPipeline(
-            transcriber: transcriber, cleaner: cleaner, inserter: PasteInserter(),
+            transcriber: transcriber, cleaner: cleaner,
+            inserter: source == .window ? KeepInWindowInserter() as any TextInserter : PasteInserter(),
             history: settings.historyRetention == .off ? nil : history)
         Task {
             let outcome = await pipeline.run(input)
@@ -233,7 +270,7 @@ final class AppController {
             case .delivered:
                 break
             }
-            finish(outcome)
+            finish(outcome, source: source)
         }
     }
 
@@ -242,21 +279,27 @@ final class AppController {
         handsFreeTimer?.cancel()
         recorder.cancel()
         status = .ready
+        recordingSource = nil
         pill.hide()
     }
 
-    private func finish(_ outcome: DictationOutcome) {
+    private func finish(_ outcome: DictationOutcome, source: RecordingSource) {
         status = .ready
+        recordingSource = nil
         switch outcome {
         case .noSpeech:
-            pill.hide()
+            if source == .window { pill.flash("No speech heard") } else { pill.hide() }
         case .transcriptionFailed:
             pill.flash("Couldn't transcribe")
         case let .delivered(result):
-            switch result.insert {
+            if source == .window {
+                windowText = windowText.isEmpty ? result.finalText : windowText + "\n" + result.finalText
+            } else {
+                switch result.insert {
             case .pasted: pill.hide()
             case .copiedNoTextField: pill.flash("Copied — no text field")
             case .copiedNoPermission: pill.flash("Copied — allow Accessibility to paste")
+                }
             }
             markDictionaryUsed(result.usedDictionaryEntryIDs)
             historyRevision += 1
@@ -271,8 +314,12 @@ final class AppController {
         handsFreeTimer?.cancel()
         handsFreeTimer = Task { [weak self] in
             try? await Task.sleep(for: .seconds(HotkeyStateMachine.handsFreeLimit))
-            guard !Task.isCancelled else { return }
-            self?.handle(.handsFreeTimeout)
+            guard !Task.isCancelled, let self else { return }
+            if self.recordingSource == .hotkey {
+                self.handle(.handsFreeTimeout)
+            } else {
+                self.stopRecording()
+            }
         }
     }
 
@@ -311,6 +358,9 @@ final class AppController {
             machine = HotkeyStateMachine()
         }
         if old.launchAtLogin != settings.launchAtLogin { applyLaunchAtLogin() }
+        if old.showFloatingButton != settings.showFloatingButton {
+            floatingButton.setVisible(settings.showFloatingButton)
+        }
         if old.historyRetention != settings.historyRetention { Task { await purgeHistory() } }
         let modelsChanged = old.speechEngine != settings.speechEngine || old.cleanupModelID != settings.cleanupModelID
         if modelsChanged && canReloadModels { Task { await loadModels() } }
@@ -374,4 +424,9 @@ final class AppController {
         case .failed: "exclamationmark.triangle"
         }
     }
+}
+
+/// The main window shows the text itself, so nothing is pasted.
+private struct KeepInWindowInserter: TextInserter {
+    func insert(_ text: String) async -> InsertOutcome { .pasted }
 }

@@ -1,14 +1,21 @@
 import AppKit
 import SwiftUI
 
-/// Opens and reuses the Setup, Settings and History windows. A menu bar app has
-/// no main window, so these are plain AppKit windows hosting SwiftUI views.
+/// Opens and reuses the main, Setup, Settings and History windows. They are plain
+/// AppKit windows hosting SwiftUI views, because the app's only scene is the menu bar extra.
 @MainActor
 final class WindowCoordinator {
     static let shared = WindowCoordinator()
 
     var controller: AppController?
     private var windows: [String: NSWindow] = [:]
+
+    func showMain() {
+        guard let controller else { return }
+        show("main", title: "Saywise", size: NSSize(width: 520, height: 700)) {
+            MainView(controller: controller)
+        }
+    }
 
     func showSetup() {
         guard let controller else { return }

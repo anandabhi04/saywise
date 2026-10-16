@@ -10,6 +10,7 @@ struct ChirpSettingsTests {
         #expect(s.speechEngine == .whisper)
         #expect(s.historyRetention == .days30)
         #expect(s.keepAudio == false)
+        #expect(s.showFloatingButton == true)
         #expect(s.cleanupModelID == "mlx-community/Qwen3-4B-Instruct-2507-4bit")
     }
 
@@ -27,5 +28,10 @@ struct ChirpSettingsTests {
         var expected = ChirpSettings()
         expected.keepAudio = true
         #expect(decoded == expected)
+    }
+
+    @Test func floatingButtonSettingRoundTrips() throws {
+        let decoded = try JSONDecoder().decode(ChirpSettings.self, from: Data(#"{"showFloatingButton": false}"#.utf8))
+        #expect(decoded.showFloatingButton == false)
     }
 }

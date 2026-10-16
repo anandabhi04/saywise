@@ -21,8 +21,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         WindowCoordinator.shared.controller = controller
         controller.start()
+        WindowCoordinator.shared.showMain()
         if controller.needsSetup || controller.settingsError != nil {
             WindowCoordinator.shared.showSetup()
         }
+    }
+
+    // A click on the Dock icon brings the main window back after it was closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        WindowCoordinator.shared.showMain()
+        return true
     }
 }

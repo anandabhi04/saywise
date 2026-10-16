@@ -34,7 +34,6 @@ targets:
         CFBundleDisplayName: Saywise
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
-        LSUIElement: true
         LSMinimumSystemVersion: "15.0"
         NSMicrophoneUsageDescription: Saywise records your voice only while you hold the dictation key.
     entitlements:

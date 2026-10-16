@@ -16,6 +16,7 @@ public struct ChirpSettings: Codable, Equatable, Sendable {
     public var titleRules: [TitleRule] = TitleRule.defaults
     public var historyRetention: HistoryRetention = .days30
     public var keepAudio = false
+    public var showFloatingButton = true
 
     public init() {}
 
@@ -35,5 +36,6 @@ public struct ChirpSettings: Codable, Equatable, Sendable {
         titleRules = try c.decodeIfPresent([TitleRule].self, forKey: .titleRules) ?? d.titleRules
         historyRetention = try c.decodeIfPresent(HistoryRetention.self, forKey: .historyRetention) ?? d.historyRetention
         keepAudio = try c.decodeIfPresent(Bool.self, forKey: .keepAudio) ?? d.keepAudio
+        showFloatingButton = try c.decodeIfPresent(Bool.self, forKey: .showFloatingButton) ?? d.showFloatingButton
     }
 }

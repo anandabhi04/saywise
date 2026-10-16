@@ -7,6 +7,7 @@ struct MenuContent: View {
     var body: some View {
         Text(controller.statusText)
         Divider()
+        Button("Open Saywise") { WindowCoordinator.shared.showMain() }
         Button("History…") { WindowCoordinator.shared.showHistory() }
         Button("Settings…") { WindowCoordinator.shared.showSettings() }
             .keyboardShortcut(",")
