@@ -17,15 +17,22 @@ struct StatCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
-        .onAppear {
-            guard animate, let target = Int(value.filter(\.isNumber)) else { shown = -1; return }
-            withAnimation(.easeOut(duration: 0.6)) { shown = Double(target) }
+        .onChange(of: value, initial: true) { oldValue, newValue in
+            guard let target = integerValue else { return }
+            if oldValue == newValue && !animate {
+                shown = Double(target)
+            } else {
+                withAnimation(.easeOut(duration: 0.6)) { shown = Double(target) }
+            }
         }
     }
 
+    private var integerValue: Int? {
+        Int(value.replacingOccurrences(of: Locale.current.groupingSeparator ?? ",", with: ""))
+    }
+
     private var displayValue: String {
-        if shown < 0 { return value }
-        guard let target = Int(value.filter(\.isNumber)), target > 0 else { return value }
+        guard integerValue != nil else { return value }
         return Int(shown).formatted()
     }
 }

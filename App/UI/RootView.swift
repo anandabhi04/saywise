@@ -39,7 +39,7 @@ struct RootView: View {
             ZStack {
                 switch state.page {
                 case .home: HomeView(controller: controller, state: state)
-                case .history: HistoryView(controller: controller)
+                case .history: HistoryView(controller: controller, focus: $state.historyFocus)
                 case .dictionary: PageColumn(title: "Dictionary") { DictionaryTab(controller: controller) }
                 case .snippets: PageColumn(title: "Snippets") { SnippetsTab(controller: controller) }
                 case .appStyles: PageColumn(title: "App styles") { AppStylesTab(controller: controller) }
