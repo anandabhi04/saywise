@@ -18,7 +18,8 @@ struct FakeCleaner: Cleaner {
     var error: Error?
 
     func clean(_ request: CleanupRequest) async throws -> String {
-        if delay > .zero { try? await Task.sleep(for: delay) }
+        // A real MLX generation ignores cancellation, so the fake must too.
+        if delay > .zero { await Task.detached { try? await Task.sleep(for: delay) }.value }
         if let error { throw error }
         return reply(request)
     }
@@ -39,6 +40,10 @@ final class RecordingHistory: HistoryWriting {
     func save(_ entry: HistoryEntry) async throws {
         entries.withLock { $0.append(entry) }
     }
+}
+
+struct ThrowingHistory: HistoryWriting {
+    func save(_ entry: HistoryEntry) async throws { throw TestError() }
 }
 
 struct TestError: Error {}

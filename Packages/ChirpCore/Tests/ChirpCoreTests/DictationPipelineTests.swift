@@ -11,7 +11,7 @@ struct DictationPipelineTests {
         transcribeError: Error? = nil,
         cleaner: FakeCleaner = FakeCleaner(reply: { _ in "Cleaned text here." }),
         inserter: RecordingInserter = RecordingInserter(),
-        history: RecordingHistory? = RecordingHistory(),
+        history: (any HistoryWriting)? = RecordingHistory(),
         timeout: Duration = .seconds(2)
     ) -> DictationPipeline {
         DictationPipeline(
@@ -49,13 +49,13 @@ struct DictationPipelineTests {
         }
     }
 
-    @Test func usesCleanedTextPastesAndSavesHistory() async {
+    @Test func usesCleanedTextPastesAndSavesHistory() async throws {
         let inserter = RecordingInserter()
         let history = RecordingHistory()
         let cleaner = FakeCleaner(reply: { _ in "Can we move the sync to Friday?" })
         let outcome = await pipeline(transcript: "um can we move the sync to friday", cleaner: cleaner, inserter: inserter, history: history)
             .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings()))
-        let result = try! #require(delivered(outcome))
+        let result = try #require(delivered(outcome))
         #expect(result.finalText == "Can we move the sync to Friday?")
         #expect(result.cleanup == .used)
         #expect(result.style == .document)
@@ -166,5 +166,14 @@ struct DictationPipelineTests {
         let result = delivered(await pipeline(transcript: "this is a longer sentence here", history: nil)
             .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings())))
         #expect(result != nil)
+    }
+
+    @Test func historyFailureDoesNotBlockDelivery() async {
+        let inserter = RecordingInserter()
+        let cleaner = FakeCleaner(reply: { _ in "Can we move the sync to Friday?" })
+        let outcome = await pipeline(transcript: "um can we move the sync to friday", cleaner: cleaner, inserter: inserter, history: ThrowingHistory())
+            .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings()))
+        #expect(delivered(outcome)?.finalText == "Can we move the sync to Friday?")
+        #expect(inserter.inserted.withLock { $0 } == ["Can we move the sync to Friday?"])
     }
 }
