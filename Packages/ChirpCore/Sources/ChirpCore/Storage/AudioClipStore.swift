@@ -43,6 +43,9 @@ public struct AudioClipStore: Sendable {
     }
 
     public func delete(fileName: String) throws {
+        guard !fileName.isEmpty, fileName != ".", fileName != "..",
+              !fileName.contains("/"), URL(fileURLWithPath: fileName).lastPathComponent == fileName
+        else { return }
         let url = directory.appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)

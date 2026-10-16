@@ -89,6 +89,34 @@ struct StorageTests {
         try store.delete(fileName: deleted)
     }
 
+    @Test(arguments: ["", ".", "..", "../x", "a/b.wav"])
+    func audioClipStoreIgnoresInvalidFileNames(fileName: String) throws {
+        let parent = tempDir()
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let directory = parent.appendingPathComponent("clips", isDirectory: true)
+        let nestedDirectory = directory.appendingPathComponent("a", isDirectory: true)
+        try FileManager.default.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+        let outside = parent.appendingPathComponent("x")
+        let kept = directory.appendingPathComponent("keep.wav")
+        let nested = nestedDirectory.appendingPathComponent("b.wav")
+        let contents = Data("keep this file".utf8)
+        for file in [outside, kept, nested] {
+            try contents.write(to: file)
+        }
+
+        try AudioClipStore(directory: directory).delete(fileName: fileName)
+
+        for folder in [parent, directory, nestedDirectory] {
+            var isDirectory: ObjCBool = false
+            #expect(FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory))
+            #expect(isDirectory.boolValue)
+        }
+        for file in [outside, kept, nested] {
+            #expect(FileManager.default.fileExists(atPath: file.path))
+            #expect(try Data(contentsOf: file) == contents)
+        }
+    }
+
     @Test func audioClipStoreDeletesAllClips() throws {
         let store = AudioClipStore(directory: tempDir())
         defer { try? FileManager.default.removeItem(at: store.directory) }

@@ -213,7 +213,7 @@ final class AppController {
             switch outcome {
             case .noSpeech, .transcriptionFailed:
                 if let audioFileName {
-                    try? FileManager.default.removeItem(at: paths.audioDirectory.appendingPathComponent(audioFileName))
+                    try? clipStore.delete(fileName: audioFileName)
                 }
             case .delivered:
                 break
