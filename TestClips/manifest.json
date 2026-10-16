@@ -2,6 +2,8 @@
   "clips": [
     { "file": "en-01.wav", "group": "english", "language": "english", "appBundleID": "com.tinyspeck.slackmacgap", "expected": "can we move the sync to 5" },
     { "file": "hi-01.wav", "group": "hindi", "language": "hindi", "appBundleID": "com.apple.Notes", "expected": "kal subah das baje milte hain." },
-    { "file": "hinglish-01.wav", "group": "hinglish", "language": "hindi", "appBundleID": "com.tinyspeck.slackmacgap", "expected": "kal meeting hai, 5 baje" }
+    { "file": "hinglish-01.wav", "group": "hinglish", "language": "hindi", "appBundleID": "com.tinyspeck.slackmacgap", "expected": "kal meeting hai, 5 baje" },
+    {"file": "hi-01.wav", "group": "hindi", "language": "auto", "appBundleID": "com.apple.Notes", "expected": "kal subah das baje milte hain."},
+    {"file": "hinglish-01.wav", "group": "hinglish", "language": "auto", "appBundleID": "com.tinyspeck.slackmacgap", "expected": "kal meeting hai, 5 baje"}
   ]
 }

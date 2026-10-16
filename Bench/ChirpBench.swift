@@ -49,10 +49,24 @@ enum ChirpBench {
             print("Usage: ChirpBench --manifest <path> [--engine whisper|qwen3ASR] [--no-cleanup]")
             exit(2)
         }
-        let engine = SpeechEngine(rawValue: value(after: "--engine", in: args) ?? "whisper") ?? .whisper
+        let engineName = value(after: "--engine", in: args) ?? "whisper"
+        guard let engine = SpeechEngine(rawValue: engineName) else {
+            let valid = SpeechEngine.allCases.map(\.rawValue).joined(separator: ", ")
+            FileHandle.standardError.write(Data("ChirpBench: unknown engine '\(engineName)'. Valid values: \(valid)\n".utf8))
+            exit(2)
+        }
         let skipCleanup = args.contains("--no-cleanup")
         let manifestURL = URL(fileURLWithPath: manifestPath)
         let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
+
+        let clipDirectory = manifestURL.deletingLastPathComponent()
+        let missing = manifest.clips.map(\.file).filter {
+            !FileManager.default.fileExists(atPath: clipDirectory.appendingPathComponent($0).path)
+        }
+        guard missing.isEmpty else {
+            FileHandle.standardError.write(Data("ChirpBench: missing clip files: \(missing.joined(separator: ", "))\n".utf8))
+            exit(1)
+        }
 
         let paths = ChirpPaths.standard
         let settings = (try? SettingsStore(url: paths.settingsFile).load()) ?? ChirpSettings()
