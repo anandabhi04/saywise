@@ -146,7 +146,7 @@ private struct HistoryRow: View {
                 Spacer()
                 Button { copy(text) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.borderless).foregroundStyle(.secondary)
             }
-            Text(text).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            Text(text).font(.callout).foregroundStyle(.primary).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary))

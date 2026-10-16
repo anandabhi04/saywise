@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saywise UI preview</title>
+<style>
+:root{
+  --bg:#ececec; --win:#f5f5f7; --side:rgba(236,236,238,.92); --card:#ffffff; --sep:rgba(0,0,0,.08);
+  --txt:#1d1d1f; --sec:rgba(60,60,67,.6); --ter:rgba(60,60,67,.3); --quat:rgba(120,120,128,.12);
+  --accent:#0a7aff; --red:#ff3b30; --green:#34c759; --orange:#ff9500; --sel:rgba(0,0,0,.07);
+  --shadow:0 20px 50px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.18);
+}
+:root[data-theme=dark]{
+  --bg:#1a1a1c; --win:#1e1e20; --side:rgba(40,40,44,.92); --card:#29292d; --sep:rgba(255,255,255,.08);
+  --txt:#f5f5f7; --sec:rgba(235,235,245,.6); --ter:rgba(235,235,245,.3); --quat:rgba(120,120,128,.24);
+  --accent:#0a84ff; --red:#ff453a; --green:#30d158; --orange:#ff9f0a; --sel:rgba(255,255,255,.1);
+  --shadow:0 20px 50px rgba(0,0,0,.5), 0 0 0 .5px rgba(255,255,255,.12);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased;padding:40px 24px 80px}
+h1.section{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--sec);margin:48px auto 14px;max-width:980px;font-weight:600}
+h1.section:first-of-type{margin-top:0}
+.topbar{max-width:980px;margin:0 auto 28px;display:flex;align-items:center;justify-content:space-between}
+.topbar b{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.topbar .pages{display:flex;gap:6px}
+.topbar button{font:inherit;border:0;background:var(--quat);color:var(--txt);padding:6px 12px;border-radius:8px;cursor:pointer}
+.topbar button.on{background:var(--txt);color:var(--win)}
+.note{max-width:980px;margin:-6px auto 14px;color:var(--sec)}
+
+/* window */
+.win{width:980px;height:640px;margin:0 auto;background:var(--win);border-radius:12px;box-shadow:var(--shadow);display:flex;overflow:hidden;position:relative}
+.side{width:220px;background:var(--side);backdrop-filter:blur(30px);border-right:.5px solid var(--sep);padding:52px 10px 12px;display:flex;flex-direction:column}
+.lights{position:absolute;top:14px;left:14px;display:flex;gap:8px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:7px;color:var(--txt);text-decoration:none;font-size:13px}
+.nav a.on{background:var(--sel)}
+.nav a svg{width:16px;height:16px;color:var(--accent)}
+.side .status{margin-top:auto;padding:10px;display:flex;gap:8px;align-items:center;font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex:none}
+.dot.red{background:var(--red);animation:pulse 1s infinite}
+.dot.grey{background:var(--ter)}
+.side .status small{display:block;color:var(--sec);font-size:11px}
+.content{flex:1;overflow:auto;padding:44px 32px 32px}
+.col{max-width:760px;margin:0 auto}
+.title{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:0}
+.sub{color:var(--sec);margin-top:4px;display:flex;align-items:center;gap:8px}
+.card{background:var(--card);border:.5px solid var(--sep);border-radius:16px;padding:20px}
+.row{display:flex;gap:16px}
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.switch{width:38px;height:22px;border-radius:11px;background:var(--green);position:relative;margin-top:6px}
+.switch:after{content:"";position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.cap{font-size:11px;color:var(--sec);font-weight:500}
+.num{font:600 34px/1.1 -apple-system,"SF Pro Rounded",ui-rounded,sans-serif;font-variant-numeric:tabular-nums;margin:6px 0 4px;letter-spacing:-.02em}
+.h{font-size:15px;font-weight:600;margin:0 0 14px}
+
+/* talk card */
+.talk{display:flex;align-items:center;gap:20px;height:120px;margin-bottom:20px}
+.rec{width:64px;height:64px;border-radius:50%;background:var(--txt);display:grid;place-items:center;flex:none;position:relative}
+.rec svg{width:24px;height:24px;color:var(--win)}
+.rec.live{background:var(--red)}
+.rec.live svg{color:#fff}
+.rec.live:before{content:"";position:absolute;inset:-6px;border-radius:50%;background:var(--red);opacity:.25;animation:breathe 1.2s ease-in-out infinite;z-index:-1}
+.talk .mid{width:200px;color:var(--sec);font-size:14px}
+.wave{display:flex;align-items:center;gap:2px;height:24px}
+.wave i{width:3px;border-radius:2px;background:currentColor;display:block}
+.last{flex:1;border-left:.5px solid var(--sep);padding-left:20px;min-width:0}
+.last p{margin:4px 0;font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.chart{height:140px;display:flex;align-items:flex-end;gap:10px;padding-top:8px}
+.chart b{flex:1;background:var(--accent);opacity:.45;border-radius:4px 4px 2px 2px;position:relative}
+.chart b.today{opacity:1}
+.chart b span{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--sec);font-weight:400}
+.apps div{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px}
+.apps .ic{width:20px;height:20px;border-radius:5px;flex:none}
+.apps .bar{height:3px;background:var(--accent);opacity:.5;border-radius:2px;margin:-4px 0 4px 30px}
+.apps .n{margin-left:auto;color:var(--sec);font-variant-numeric:tabular-nums}
+.recent div{padding:8px 0;border-top:.5px solid var(--sep)}
+.recent div:first-of-type{border-top:0}
+.recent p{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+.recent small{color:var(--sec);font-size:11px}
+.link{color:var(--accent);font-size:12px;margin-left:auto}
+.banner{display:flex;align-items:center;gap:10px;background:rgba(255,149,0,.12);border-radius:12px;padding:10px 14px;margin-bottom:20px;font-size:13px}
+.banner .b{margin-left:auto;background:var(--card);border:.5px solid var(--sep);padding:3px 10px;border-radius:6px;font-size:12px}
+
+/* history */
+.search{display:flex;gap:8px;align-items:center}
+.search input{font:inherit;width:240px;border:.5px solid var(--sep);background:var(--card);border-radius:7px;padding:5px 9px;color:var(--txt)}
+.grp{font-size:11px;font-weight:600;color:var(--sec);text-transform:uppercase;letter-spacing:.06em;margin:22px 0 6px}
+.hrow{padding:12px 14px;border-radius:12px;font-size:14px}
+.hrow small{display:block;color:var(--sec);font-size:11px;margin-top:3px}
+.hrow.open{background:var(--card);border:.5px solid var(--sep)}
+.hrow .boxes{display:flex;gap:12px;margin-top:12px}
+.hrow .box{flex:1;background:var(--quat);border-radius:10px;padding:10px 12px;font-size:13px}
+.hrow .box b{display:block;font-size:11px;color:var(--sec);margin-bottom:4px;font-weight:600}
+.hrow .meta{font-size:11px;color:var(--sec);margin-top:10px}
+
+/* settings */
+.form{display:flex;flex-direction:column;gap:18px}
+.sec{background:var(--card);border:.5px solid var(--sep);border-radius:12px;overflow:hidden}
+.sec h3{margin:0;font-size:11px;font-weight:600;color:var(--sec);text-transform:uppercase;letter-spacing:.06em;padding:10px 14px 4px}
+.sec div{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-top:.5px solid var(--sep);font-size:13px}
+.sec div:first-of-type{border-top:0}
+.pick{background:var(--quat);padding:3px 9px;border-radius:6px;font-size:12px}
+.tog{width:34px;height:20px;border-radius:10px;background:var(--green);position:relative}
+.tog:after{content:"";position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+.tog.off{background:var(--quat)}.tog.off:after{right:auto;left:2px}
+.ok{color:var(--green);font-weight:600}
+
+/* bar */
+.desk{max-width:980px;margin:0 auto;border-radius:12px;padding:36px 24px;background:linear-gradient(135deg,#6f8fb8,#b7a3c9 55%,#e9b9a4);display:flex;flex-wrap:wrap;gap:28px 40px;align-items:center;justify-content:center}
+.bslot{display:flex;flex-direction:column;align-items:center;gap:10px;color:#fff;font-size:11px;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.bar{height:34px;border-radius:17px;background:rgba(30,30,32,.72);backdrop-filter:blur(20px);box-shadow:0 6px 16px rgba(0,0,0,.3),inset 0 0 0 .5px rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;gap:9px;color:#fff;font:500 13px/1 -apple-system,sans-serif;padding:0 14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar.idle{width:52px;padding:0}
+.bar.live{width:184px;justify-content:space-between}
+.bar svg{width:14px;height:14px;opacity:.85}
+.bar .wave{height:18px}.bar .wave i{width:2.5px;background:#fff}
+.bar .esc{font-size:10px;opacity:.5;border:1px solid rgba(255,255,255,.5);border-radius:4px;padding:1px 4px}
+.bar.off{opacity:.7}.bar.off svg{opacity:.5}
+.spin{width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin .9s linear infinite}
+.chk{color:var(--green)}
+
+/* setup */
+.setup{width:480px;height:420px;margin:0 auto;background:var(--win);border-radius:12px;box-shadow:var(--shadow);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px}
+.setup svg{width:44px;height:44px;color:var(--accent);margin-bottom:18px}
+.setup h2{font-size:20px;font-weight:600;margin:0 0 8px;letter-spacing:-.01em}
+.setup p{color:var(--sec);font-size:14px;margin:0 0 26px;max-width:340px}
+.setup .btn{background:var(--accent);color:#fff;padding:7px 18px;border-radius:7px;font-weight:500}
+.dots{position:absolute;bottom:18px;display:flex;gap:6px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--ter)}
+.dots i.on{background:var(--txt)}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes wv{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+.wave.anim i{animation:wv 1s ease-in-out infinite}
+.page{display:none}.page.on{display:block}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <b>Saywise · UI preview</b>
+  <div class="pages">
+    <button class="on" data-p="home">Home</button>
+    <button data-p="history">History</button>
+    <button data-p="settings">Settings</button>
+    <button id="theme">Dark</button>
+  </div>
+</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic" viewBox="0 0 24 24"><path fill="currentColor" d="M12 15a4 4 0 0 0 4-4V6a4 4 0 1 0-8 0v5a4 4 0 0 0 4 4Zm6-4a6 6 0 0 1-5 5.92V19h3v2H8v-2h3v-2.08A6 6 0 0 1 6 11h2a4 4 0 0 0 8 0h2Z"/></symbol>
+  <symbol id="stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+  <symbol id="house" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M12 7v5l3 2M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3V4Zm0 13a3 3 0 0 1 3-3h11"/></symbol>
+  <symbol id="snip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M4 6h16M4 12h10M4 18h7M18 15v6M15 18h6"/></symbol>
+  <symbol id="app" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="7" r="3" fill="currentColor"/></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-2.1 1.6-1.4-1.6-2.8-2 .7a7 7 0 0 0-1.7-1l-.3-2.1h-3.2l-.3 2.1a7 7 0 0 0-1.7 1l-2-.7-1.6 2.8 1.6 1.4a7 7 0 0 0 0 2l-1.6 1.4 1.6 2.8 2-.7a7 7 0 0 0 1.7 1l.3 2.1h3.2l.3-2.1a7 7 0 0 0 1.7-1l2 .7 1.6-2.8-1.6-1.4a7 7 0 0 0 0-2Z"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.5" d="m5 12 5 5 9-10"/></symbol>
+  <symbol id="warn" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 7v6M12 16v1" stroke="#fff" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="clip" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="9" y="3" width="6" height="4" rx="1" fill="currentColor"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="wavef" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3 12h1M7 8v8M11 4v16M15 7v10M19 10v4M22 12h-1"/></symbol>
+</svg>
+
+<h1 class="section">Main window · 980 × 640</h1>
+
+<!-- HOME -->
+<div class="page on" id="p-home">
+<div class="win">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <aside class="side">
+    <nav class="nav">
+      <a class="on"><svg><use href="#house"/></svg>Home</a>
+      <a><svg><use href="#clock"/></svg>History</a>
+      <a><svg><use href="#book"/></svg>Dictionary</a>
+      <a><svg><use href="#snip"/></svg>Snippets</a>
+      <a><svg><use href="#app"/></svg>App styles</a>
+      <a><svg><use href="#gear"/></svg>Settings</a>
+    </nav>
+    <div class="status"><span class="dot"></span><div>Ready<small>Hold Fn in any app</small></div></div>
+  </aside>
+  <main class="content"><div class="col">
+    <div class="hdr">
+      <div><h2 class="title">Good morning</h2><div class="sub"><span class="dot"></span>Ready · Hold Fn in any app</div></div>
+      <div class="switch"></div>
+    </div>
+
+    <div class="card talk">
+      <div class="rec"><svg><use href="#mic"/></svg></div>
+      <div class="mid">Press to talk</div>
+      <div class="last">
+        <span class="cap">Last dictation</span>
+        <p>Kal 5 baje meeting hai, please send the deck before that so everyone can read it.</p>
+        <span class="cap" style="font-weight:400">Slack · 12 min ago</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="card"><span class="cap">Words today</span><div class="num">1,240</div><span class="cap" style="font-weight:400;color:var(--green)">+18% vs yesterday</span></div>
+      <div class="card"><span class="cap">Time saved</span><div class="num">26 min</div><span class="cap" style="font-weight:400">this week</span></div>
+      <div class="card"><span class="cap">Dictations</span><div class="num">31</div><span class="cap" style="font-weight:400">this week</span></div>
+      <div class="card"><span class="cap">Streak</span><div class="num">6 days</div><span class="cap" style="font-weight:400">best 14</span></div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <h3 class="h">Last 14 days</h3>
+      <div class="chart">
+        <b style="height:30%"><span>S</span></b><b style="height:55%"><span>M</span></b><b style="height:40%"><span>T</span></b><b style="height:70%"><span>W</span></b><b style="height:48%"><span>T</span></b><b style="height:62%"><span>F</span></b><b style="height:12%"><span>S</span></b>
+        <b style="height:20%"><span>S</span></b><b style="height:66%"><span>M</span></b><b style="height:80%"><span>T</span></b><b style="height:58%"><span>W</span></b><b style="height:74%"><span>T</span></b><b style="height:50%"><span>F</span></b><b class="today" style="height:88%"><span>S</span></b>
+      </div>
+      <div style="height:16px"></div>
+    </div>
+
+    <div class="row">
+      <div class="card apps" style="flex:1">
+        <h3 class="h">Top apps</h3>
+        <div><span class="ic" style="background:#4a154b"></span>Slack<span class="n">2,310</span></div><div class="bar" style="width:70%"></div>
+        <div><span class="ic" style="background:#2a7de1"></span>Mail<span class="n">1,480</span></div><div class="bar" style="width:45%"></div>
+        <div><span class="ic" style="background:#111"></span>Cursor<span class="n">960</span></div><div class="bar" style="width:29%"></div>
+        <div><span class="ic" style="background:#f6c344"></span>Notes<span class="n">540</span></div><div class="bar" style="width:16%"></div>
+        <div><span class="ic" style="background:#5865f2"></span>Discord<span class="n">210</span></div><div class="bar" style="width:6%"></div>
+      </div>
+      <div class="card recent" style="flex:1">
+        <h3 class="h" style="display:flex">Recent<span class="link">See all</span></h3>
+        <div><p>Kal 5 baje meeting hai, please send the deck before that.</p><small>Slack · 12 min ago</small></div>
+        <div><p>Thanks for the update, I will review it tonight and reply.</p><small>Mail · 1 h ago</small></div>
+        <div><p>Add a loading state to the history list when search is slow.</p><small>Cursor · 2 h ago</small></div>
+        <div><p>Groceries: doodh, bread, eggs, and coffee beans.</p><small>Notes · 3 h ago</small></div>
+        <div><p>Can we move the standup to 10:30 tomorrow?</p><small>Slack · Yesterday</small></div>
+      </div>
+    </div>
+  </div></main>
+</div>
+<p class="note" style="margin-top:14px">Below: the same Talk card while listening, and the banner slot when a permission is missing.</p>
+<div class="win" style="height:auto;padding:0">
+  <main class="content" style="padding:28px 32px"><div class="col">
+    <div class="banner"><svg width="16" height="16" style="color:var(--orange)"><use href="#warn"/></svg>Saywise needs Accessibility to paste into other apps.<span class="b">Allow</span></div>
+    <div class="card talk" style="margin:0">
+      <div class="rec live"><svg><use href="#stop"/></svg></div>
+      <div class="mid" style="color:var(--txt)"><div class="wave anim" id="w1"></div></div>
+      <div class="last"><span class="cap">Last dictation</span><p>Kal 5 baje meeting hai, please send the deck before that so everyone can read it.</p><span class="cap" style="font-weight:400">Slack · 12 min ago</span></div>
+    </div>
+  </div></main>
+</div>
+</div>
+
+<!-- HISTORY -->
+<div class="page" id="p-history">
+<div class="win">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <aside class="side">
+    <nav class="nav">
+      <a><svg><use href="#house"/></svg>Home</a>
+      <a class="on"><svg><use href="#clock"/></svg>History</a>
+      <a><svg><use href="#book"/></svg>Dictionary</a>
+      <a><svg><use href="#snip"/></svg>Snippets</a>
+      <a><svg><use href="#app"/></svg>App styles</a>
+      <a><svg><use href="#gear"/></svg>Settings</a>
+    </nav>
+    <div class="status"><span class="dot"></span><div>Ready<small>Hold Fn in any app</small></div></div>
+  </aside>
+  <main class="content"><div class="col">
+    <div class="hdr" style="align-items:center;margin-bottom:6px">
+      <h2 class="title">History</h2>
+      <div class="search"><input placeholder="Search"><span class="pick">···</span></div>
+    </div>
+    <div class="grp">Today</div>
+    <div class="hrow open">
+      Kal 5 baje meeting hai, please send the deck before that so everyone can read it.
+      <small>Slack · 10:42 · 9 s</small>
+      <div class="boxes">
+        <div class="box"><b>Heard</b>kal paanch baje meeting hai please send the deck before that so everyone can read it</div>
+        <div class="box"><b>Written</b>Kal 5 baje meeting hai, please send the deck before that so everyone can read it.</div>
+      </div>
+      <div class="meta">Casual · Hinglish · Qwen3 4B · Pasted · speech 420 ms · cleanup 610 ms · paste 30 ms</div>
+    </div>
+    <div class="hrow">Thanks for the update, I will review it tonight and reply with comments.<small>Mail · 09:51 · 6 s</small></div>
+    <div class="hrow">Add a loading state to the history list when search is slow.<small>Cursor · 09:10 · 5 s</small></div>
+    <div class="grp">Yesterday</div>
+    <div class="hrow">Groceries: doodh, bread, eggs, and coffee beans.<small>Notes · 18:20 · 4 s</small></div>
+    <div class="hrow">Can we move the standup to 10:30 tomorrow? I have a dentist appointment.<small>Slack · 17:02 · 7 s</small></div>
+    <div class="hrow">Draft: Hi team, sharing the Q4 plan. The main change is that we ship the dashboard first.<small>Mail · 11:35 · 14 s</small></div>
+    <div class="grp">Mon 13 Oct</div>
+    <div class="hrow">Remind me to call the bank about the card limit.<small>Notes · 16:48 · 3 s</small></div>
+  </div></main>
+</div>
+</div>
+
+<!-- SETTINGS -->
+<div class="page" id="p-settings">
+<div class="win">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <aside class="side">
+    <nav class="nav">
+      <a><svg><use href="#house"/></svg>Home</a>
+      <a><svg><use href="#clock"/></svg>History</a>
+      <a><svg><use href="#book"/></svg>Dictionary</a>
+      <a><svg><use href="#snip"/></svg>Snippets</a>
+      <a><svg><use href="#app"/></svg>App styles</a>
+      <a class="on"><svg><use href="#gear"/></svg>Settings</a>
+    </nav>
+    <div class="status"><span class="dot"></span><div>Ready<small>Hold Fn in any app</small></div></div>
+  </aside>
+  <main class="content"><div class="col" style="max-width:600px">
+    <h2 class="title" style="margin-bottom:20px">Settings</h2>
+    <div class="form">
+      <div class="sec"><h3>Talk</h3>
+        <div>Talk key<span class="pick">Fn ▾</span></div>
+        <div>Show floating bar<span class="tog"></span></div>
+        <div>Play sounds<span class="tog"></span></div>
+      </div>
+      <div class="sec"><h3>Language</h3>
+        <div>Language<span class="pick">Auto detect ▾</span></div>
+        <div>Speech engine<span class="pick">Whisper large-v3-turbo ▾</span></div>
+      </div>
+      <div class="sec"><h3>Models</h3>
+        <div>Status<span class="ok">✓ Ready</span></div>
+        <div>Cleanup model<span class="pick" style="font-family:ui-monospace,monospace">mlx-community/Qwen3-4B-Instruct-4bit</span></div>
+        <div>Downloaded<span style="color:var(--sec)">4.1 GB · Show in Finder</span></div>
+      </div>
+      <div class="sec"><h3>History</h3>
+        <div>Keep history<span class="pick">30 days ▾</span></div>
+        <div>Delete all history<span class="pick" style="color:var(--red)">Delete…</span></div>
+      </div>
+      <div class="sec"><h3>General</h3>
+        <div>Start at login<span class="tog off"></span></div>
+      </div>
+    </div>
+  </div></main>
+</div>
+</div>
+
+<h1 class="section">Floating bar · all states, dark glass in both modes</h1>
+<div class="desk">
+  <div class="bslot"><div class="bar idle"><svg><use href="#mic"/></svg></div>Idle · 52 pt</div>
+  <div class="bslot"><div class="bar live"><span class="dot red"></span><div class="wave anim" id="w2"></div><span class="esc">esc</span></div>Listening · 184 pt</div>
+  <div class="bslot"><div class="bar live"><svg style="color:var(--red);opacity:1"><use href="#lock"/></svg><div class="wave anim" id="w3"></div><span class="esc">esc</span></div>Hands-free</div>
+  <div class="bslot"><div class="bar"><span class="spin"></span>Finishing</div>Finishing</div>
+  <div class="bslot"><div class="bar idle"><svg class="chk" style="opacity:1"><use href="#check"/></svg></div>Pasted · 0.4 s</div>
+  <div class="bslot"><div class="bar"><svg><use href="#clip"/></svg>Copied · ⌘V to paste</div>Copied</div>
+  <div class="bslot"><div class="bar idle off"><svg><use href="#mic"/></svg></div>Mic off</div>
+  <div class="bslot"><div class="bar"><svg style="color:var(--orange);opacity:1"><use href="#warn"/></svg>Could not hear you</div>Error</div>
+</div>
+
+<h1 class="section">First run · 480 × 420, one step per page</h1>
+<div class="setup">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <svg><use href="#wavef"/></svg>
+  <h2>Welcome to Saywise</h2>
+  <p>Hold Fn, speak, let go. Your words appear where you type. English, Hindi, or both. Everything stays on this Mac.</p>
+  <span class="btn">Continue</span>
+  <div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</div>
+
+<script>
+function wave(id,n,max){const w=document.getElementById(id);for(let i=0;i<n;i++){const b=document.createElement('i');const h=4+Math.round((0.3+0.7*Math.abs(Math.sin(i*0.9)))*(max-4));b.style.height=h+'px';b.style.animationDelay=(i*60%900)+'ms';w.appendChild(b)}}
+wave('w1',24,24);wave('w2',20,18);wave('w3',20,18);
+document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-p]').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));document.getElementById('p-'+b.dataset.p).classList.add('on')});
+const t=document.getElementById('theme');t.onclick=()=>{const d=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=d?'':'dark';t.textContent=d?'Dark':'Light'};
+</script>
+</body>
+</html>

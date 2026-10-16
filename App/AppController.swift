@@ -408,7 +408,7 @@ final class AppController {
 
     var shouldShowSetup: Bool {
         switch status {
-        case .starting, .loadingModels, .failed: true
+        case .loadingModels, .failed: true
         default: needsSetup
         }
     }

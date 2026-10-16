@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saywise UI</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #e9e9ec;
+    --wall-a: #c9d3e3;
+    --wall-b: #e7e3ee;
+    --wall-c: #f1e9dc;
+    --win: #f5f5f7;
+    --win-edge: rgba(0,0,0,.14);
+    --card: #ffffff;
+    --sep: rgba(0,0,0,.09);
+    --label: #1d1d1f;
+    --label2: rgba(29,29,31,.55);
+    --label3: rgba(29,29,31,.32);
+    --fill4: rgba(0,0,0,.06);
+    --fill3: rgba(0,0,0,.1);
+    --accent: #0a7aff;
+    --red: #ff3b30;
+    --green: #34c759;
+    --orange: #ff9500;
+    --menu: rgba(245,245,247,.82);
+    --menubar: rgba(255,255,255,.55);
+    --rec-fill: #1d1d1f;
+    --rec-glyph: #f5f5f7;
+    --shadow-win: 0 22px 60px rgba(0,0,0,.22), 0 0 0 .5px rgba(0,0,0,.18);
+    --page-text: #1d1d1f;
+  }
+  html[data-theme="dark"] {
+    --bg: #161618;
+    --wall-a: #2a3140;
+    --wall-b: #2c2634;
+    --wall-c: #342d26;
+    --win: #28282a;
+    --win-edge: rgba(255,255,255,.12);
+    --card: #1e1e20;
+    --sep: rgba(255,255,255,.1);
+    --label: #f5f5f7;
+    --label2: rgba(245,245,247,.55);
+    --label3: rgba(245,245,247,.3);
+    --fill4: rgba(255,255,255,.07);
+    --fill3: rgba(255,255,255,.12);
+    --accent: #0a84ff;
+    --red: #ff453a;
+    --green: #30d158;
+    --orange: #ff9f0a;
+    --menu: rgba(40,40,44,.78);
+    --menubar: rgba(30,30,32,.6);
+    --rec-fill: #f5f5f7;
+    --rec-glyph: #1d1d1f;
+    --shadow-win: 0 22px 60px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.12);
+    --page-text: #f5f5f7;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--page-text);
+    background: var(--bg);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  svg { display: block; }
+
+  /* ---------- page chrome ---------- */
+  .top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px; position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    backdrop-filter: blur(16px);
+    border-bottom: .5px solid var(--sep);
+  }
+  .top h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+  .top p { margin: 2px 0 0; color: var(--label2); font-size: 12px; }
+  .toggle {
+    display: inline-flex; border: .5px solid var(--sep); border-radius: 8px; overflow: hidden; background: var(--fill4);
+  }
+  .toggle button {
+    all: unset; padding: 5px 12px; font: inherit; font-size: 12px; color: var(--label2); cursor: pointer;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--card); color: var(--label); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+
+  .desk {
+    margin: 24px 28px 60px;
+    border-radius: 18px;
+    background:
+      radial-gradient(1200px 600px at 10% 0%, var(--wall-a), transparent 60%),
+      radial-gradient(900px 700px at 90% 20%, var(--wall-b), transparent 60%),
+      radial-gradient(900px 600px at 50% 110%, var(--wall-c), transparent 60%),
+      var(--bg);
+    padding: 40px 36px 48px;
+    box-shadow: inset 0 0 0 .5px var(--sep);
+  }
+  section { margin-bottom: 56px; }
+  section:last-child { margin-bottom: 0; }
+  .sec-title {
+    display: flex; align-items: baseline; gap: 12px; margin: 0 0 18px;
+  }
+  .sec-title h2 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: .02em; text-transform: uppercase; color: var(--label2); }
+  .sec-title span { color: var(--label3); font-size: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+  .tag { font-size: 11px; color: var(--label2); margin: 10px 0 0 4px; }
+
+  /* ---------- macOS window ---------- */
+  .win {
+    width: 400px; height: 520px;
+    background: var(--win);
+    border-radius: 11px;
+    box-shadow: var(--shadow-win);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .titlebar { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px 0 12px; }
+  .lights { display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
+  .lights i:nth-child(1) { background: #ff5f57; }
+  .lights i:nth-child(2) { background: #febc2e; }
+  .lights i:nth-child(3) { background: #28c840; }
+  .tools { display: flex; gap: 4px; }
+  .tools b {
+    width: 28px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--label2);
+  }
+  .tools b svg { width: 16px; height: 16px; }
+  .body { padding: 0 20px 20px; display: flex; flex-direction: column; gap: 16px; flex: 1; min-height: 0; }
+
+  .status { display: flex; align-items: center; gap: 8px; height: 28px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .dot.red { background: var(--red); animation: pulse 1s ease-in-out infinite alternate; }
+  .dot.grey { background: var(--label3); }
+  .dot.orange { background: var(--orange); }
+  .status .txt { font-weight: 600; font-size: 13px; }
+  .status .hint { color: var(--label2); font-size: 13px; }
+  .status .hint::before { content: "·"; margin: 0 6px 0 0; color: var(--label3); }
+  .status .sw { margin-left: auto; }
+  .sw { width: 26px; height: 15px; border-radius: 8px; background: var(--accent); position: relative; display: inline-block; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 1px; right: 1px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .sw.off { background: var(--fill3); }
+  .sw.off::after { right: auto; left: 1px; }
+  .progress { height: 3px; border-radius: 2px; background: var(--fill4); overflow: hidden; margin-top: -8px; }
+  .progress i { display: block; height: 100%; width: 39%; background: var(--accent); border-radius: 2px; }
+
+  .banner {
+    display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px;
+    border-radius: 10px; background: color-mix(in srgb, var(--orange) 12%, transparent);
+    font-size: 13px;
+  }
+  .banner svg { width: 16px; height: 16px; color: var(--orange); flex: none; }
+  .banner span { flex: 1; }
+  .btn {
+    font: inherit; font-size: 12px; font-weight: 500; padding: 4px 11px; border-radius: 6px;
+    background: var(--card); color: var(--label); border: .5px solid var(--sep); box-shadow: 0 1px 1px rgba(0,0,0,.06);
+  }
+  .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .btn.lg { font-size: 13px; padding: 6px 18px; border-radius: 7px; }
+
+  .stage { height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  .rec {
+    width: 72px; height: 72px; border-radius: 50%; background: var(--rec-fill); color: var(--rec-glyph);
+    display: grid; place-items: center; position: relative;
+    transition: transform .12s ease-out;
+  }
+  .rec svg { width: 30px; height: 30px; }
+  .rec.live { background: var(--red); color: #fff; }
+  .rec.live::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--red); opacity: .25; z-index: -1;
+    animation: breathe 1.2s ease-in-out infinite alternate;
+  }
+  .rec.off { background: var(--fill4); color: var(--label3); }
+  .rec.busy { opacity: .6; }
+  .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; animation: spin .9s linear infinite; }
+  .spinner.dark { border-color: rgba(0,0,0,.15); border-top-color: var(--label2); }
+  .caption { color: var(--label2); font-size: 13px; }
+  .wave { display: flex; align-items: center; gap: 2px; height: 24px; }
+  .wave i { width: 3px; border-radius: 2px; background: currentColor; height: 4px; animation: bar 1.1s ease-in-out infinite alternate; }
+  .stage .wave { color: var(--label); }
+
+  .card {
+    flex: 1; min-height: 0; border-radius: 12px; background: var(--card); box-shadow: 0 0 0 .5px var(--sep);
+    padding: 12px; position: relative; font-size: 13px; line-height: 1.45; white-space: pre-line;
+  }
+  .card.empty { color: var(--label2); }
+  .card .acts { position: absolute; right: 10px; bottom: 8px; display: flex; gap: 2px; }
+  .card .acts b { width: 24px; height: 22px; border-radius: 5px; display: grid; place-items: center; color: var(--label2); }
+  .card .acts b svg { width: 14px; height: 14px; }
+
+  /* ---------- floating bar ---------- */
+  .bar-desk { display: flex; flex-wrap: wrap; gap: 36px 44px; align-items: flex-end; }
+  .bar-slot { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 120px; }
+  .bar {
+    height: 36px; min-width: 56px; padding: 0 12px; border-radius: 18px;
+    background: rgba(28,28,30,.82);
+    backdrop-filter: blur(18px) saturate(1.4);
+    box-shadow: 0 6px 14px rgba(0,0,0,.28), inset 0 0 0 .5px rgba(255,255,255,.14);
+    color: #fff; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    white-space: nowrap;
+  }
+  .bar svg { width: 15px; height: 15px; flex: none; }
+  .bar.hover { background: rgba(60,60,64,.86); box-shadow: 0 8px 18px rgba(0,0,0,.3), inset 0 0 0 .5px rgba(255,255,255,.22); transform: scale(1.03); }
+  .bar.live { width: 200px; padding: 0 14px; justify-content: flex-start; }
+  .bar.live .wave { color: #fff; }
+  .bar .rd { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 1s ease-in-out infinite alternate; flex: none; }
+  .bar.muted { opacity: .7; }
+  .bar.muted svg { opacity: .5; }
+  .bar .spinner { width: 14px; height: 14px; border-width: 1.5px; }
+  .bar .warn { color: var(--orange); }
+  .bar .ok { color: #fff; opacity: .9; }
+  .tip {
+    font-size: 11px; color: #fff; background: rgba(60,60,64,.95); padding: 3px 7px; border-radius: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3); position: relative; top: -2px;
+  }
+  .over-app {
+    width: 100%; margin-top: 8px; border-radius: 14px; padding: 26px 26px 20px;
+    background: var(--win); box-shadow: var(--shadow-win); position: relative; overflow: hidden;
+  }
+  .over-app .fake { height: 10px; border-radius: 5px; background: var(--fill4); margin-bottom: 10px; }
+  .over-app .fake.w1 { width: 62%; } .over-app .fake.w2 { width: 84%; } .over-app .fake.w3 { width: 40%; }
+  .over-app .caret { display: inline-block; width: 1.5px; height: 14px; background: var(--accent); vertical-align: middle; animation: blink 1s steps(2) infinite; }
+  .over-app .bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px; }
+  .over-app .bar.live { transform: translateX(-50%); }
+
+  /* ---------- onboarding ---------- */
+  .ob {
+    width: 480px; height: 400px; background: var(--win); border-radius: 11px; box-shadow: var(--shadow-win);
+    display: flex; flex-direction: column; overflow: hidden; position: relative;
+  }
+  .ob .titlebar { height: 44px; }
+  .ob .page { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 56px; gap: 10px; }
+  .ob .sym { width: 48px; height: 48px; color: var(--accent); margin-bottom: 8px; }
+  .ob .sym.green { color: var(--green); }
+  .ob h3 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+  .ob p { margin: 0; color: var(--label2); font-size: 13px; max-width: 320px; }
+  .ob .btn { margin-top: 16px; }
+  .ob .link { color: var(--accent); font-size: 12px; margin-top: 8px; }
+  .ob .dots { display: flex; gap: 6px; justify-content: center; padding: 0 0 18px; }
+  .ob .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--fill3); }
+  .ob .dots i.on { background: var(--label2); }
+  .ob .pbar { width: 300px; height: 4px; border-radius: 2px; background: var(--fill4); margin-top: 18px; overflow: hidden; }
+  .ob .pbar i { display: block; width: 39%; height: 100%; background: var(--accent); }
+  .ob .pct { font-size: 12px; color: var(--label2); margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .ob .check { display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-weight: 500; margin-top: 16px; }
+  .ob .check svg { width: 16px; height: 16px; }
+
+  /* ---------- menu bar ---------- */
+  .mb-wrap { width: 640px; position: relative; height: 330px; }
+  .menubar {
+    height: 26px; background: var(--menubar); backdrop-filter: blur(20px); border-radius: 10px 10px 0 0;
+    display: flex; align-items: center; justify-content: flex-end; padding: 0 12px; gap: 18px; font-size: 13px;
+    box-shadow: inset 0 -.5px 0 var(--sep);
+  }
+  .menubar .ic { width: 16px; height: 16px; color: var(--label); opacity: .85; }
+  .menubar .sel { background: var(--fill3); border-radius: 5px; padding: 2px 6px; margin: 0 -6px; }
+  .menubar .sel .ic { opacity: 1; }
+  .menu {
+    position: absolute; right: 118px; top: 30px; width: 232px; padding: 5px;
+    background: var(--menu); backdrop-filter: blur(30px) saturate(1.6); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25), 0 0 0 .5px var(--win-edge);
+    font-size: 13px;
+  }
+  .menu div { padding: 4px 10px 4px 24px; border-radius: 5px; display: flex; align-items: center; position: relative; }
+  .menu div.dis { color: var(--label2); }
+  .menu div.hi { background: var(--accent); color: #fff; }
+  .menu div .k { margin-left: auto; color: var(--label3); font-size: 12px; letter-spacing: .04em; }
+  .menu div.hi .k { color: rgba(255,255,255,.7); }
+  .menu div.chk::before { content: "✓"; position: absolute; left: 8px; font-size: 11px; }
+  .menu hr { border: 0; border-top: .5px solid var(--sep); margin: 5px 10px; }
+  .mb-app { position: absolute; inset: 26px 0 0; border-radius: 0 0 10px 10px; background: var(--fill4); }
+
+  /* ---------- notes ---------- */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .note { background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: 0 0 0 .5px var(--sep); }
+  .note h4 { margin: 0 0 6px; font-size: 13px; }
+  .note p { margin: 0; color: var(--label2); }
+
+  @keyframes bar { from { height: 4px; } to { height: 20px; } }
+  .wave i:nth-child(1)  { animation-delay: -.1s;  animation-duration: .9s; }
+  .wave i:nth-child(2)  { animation-delay: -.3s;  animation-duration: 1.2s; }
+  .wave i:nth-child(3)  { animation-delay: -.5s;  animation-duration: .8s; }
+  .wave i:nth-child(4)  { animation-delay: -.2s;  animation-duration: 1.1s; }
+  .wave i:nth-child(5)  { animation-delay: -.7s;  animation-duration: .7s; }
+  .wave i:nth-child(6)  { animation-delay: -.4s;  animation-duration: 1.3s; }
+  .wave i:nth-child(7)  { animation-delay: -.9s;  animation-duration: .9s; }
+  .wave i:nth-child(8)  { animation-delay: -.1s;  animation-duration: 1.0s; }
+  .wave i:nth-child(9)  { animation-delay: -.6s;  animation-duration: .8s; }
+  .wave i:nth-child(10) { animation-delay: -.3s;  animation-duration: 1.2s; }
+  .wave i:nth-child(11) { animation-delay: -.8s;  animation-duration: .7s; }
+  .wave i:nth-child(12) { animation-delay: -.2s;  animation-duration: 1.1s; }
+  .wave i:nth-child(13) { animation-delay: -.5s;  animation-duration: .9s; }
+  .wave i:nth-child(14) { animation-delay: -.1s;  animation-duration: 1.3s; }
+  .wave i:nth-child(15) { animation-delay: -.7s;  animation-duration: .8s; }
+  .wave i:nth-child(16) { animation-delay: -.4s;  animation-duration: 1.0s; }
+  .wave i:nth-child(17) { animation-delay: -.9s;  animation-duration: .7s; }
+  .wave i:nth-child(18) { animation-delay: -.2s;  animation-duration: 1.2s; }
+  .wave i:nth-child(19) { animation-delay: -.6s;  animation-duration: .9s; }
+  .wave i:nth-child(20) { animation-delay: -.3s;  animation-duration: .8s; }
+  .wave i:nth-child(21) { animation-delay: -.8s;  animation-duration: 1.1s; }
+  .wave i:nth-child(22) { animation-delay: -.1s;  animation-duration: .7s; }
+  .wave i:nth-child(23) { animation-delay: -.5s;  animation-duration: 1.0s; }
+  .wave i:nth-child(24) { animation-delay: -.7s;  animation-duration: .9s; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: .45; } }
+  @keyframes breathe { from { transform: scale(1); } to { transform: scale(1.18); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes blink { to { visibility: hidden; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
+      <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>
+    </symbol>
+    <symbol id="i-mic-slash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
+      <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path d="M4 4l16 16"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/>
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>
+    </symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 7v6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.3" fill="#fff"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8 12.5l2.6 2.6L16 9.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <path d="M3 12v0M7 8v8M11 5v14M15 9v6M19 11v2"/>
+    </symbol>
+    <symbol id="i-kbd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>
+    </symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 7v9M8.5 12.5L12 16l3.5-3.5"/>
+    </symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 12h6M9 16h4"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <div>
+    <h1>Saywise UI</h1>
+    <p>Main window, floating bar, first run and menu bar. Spec: docs/design/saywise-ui.md</p>
+  </div>
+  <div class="toggle" role="group" aria-label="Theme">
+    <button id="t-light" aria-pressed="true" onclick="setTheme('light')">Light</button>
+    <button id="t-dark" aria-pressed="false" onclick="setTheme('dark')">Dark</button>
+  </div>
+</header>
+
+<main class="desk">
+
+  <!-- ================= MAIN WINDOW ================= -->
+  <section>
+    <div class="sec-title"><h2>Main window</h2><span>400 × 520 pt · three parts: status, button, text</span></div>
+    <div class="row">
+
+      <!-- Ready, empty -->
+      <div>
+        <div class="win">
+          <div class="titlebar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools"><b><svg><use href="#i-clock"/></svg></b><b><svg><use href="#i-gear"/></svg></b></div>
+          </div>
+          <div class="body">
+            <div class="status"><span class="dot"></span><span class="txt">Ready</span><span class="hint">Hold Fn in any app</span><span class="sw"></span></div>
+            <div class="stage">
+              <div class="rec"><svg><use href="#i-mic"/></svg></div>
+              <div class="caption">Press to talk</div>
+            </div>
+            <div class="card empty">What you say will appear here.</div>
+          </div>
+        </div>
+        <div class="tag">Ready · empty</div>
+      </div>
+
+      <!-- Listening -->
+      <div>
+        <div class="win">
+          <div class="titlebar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools"><b><svg><use href="#i-clock"/></svg></b><b><svg><use href="#i-gear"/></svg></b></div>
+          </div>
+          <div class="body">
+            <div class="status"><span class="dot red"></span><span class="txt">Listening</span><span class="sw"></span></div>
+            <div class="stage">
+              <div class="rec live"><svg><use href="#i-stop"/></svg></div>
+              <div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="card">Kal 5 baje meeting hai, please join on time. I will send the notes after.
+              <div class="acts"><b><svg><use href="#i-copy"/></svg></b><b><svg><use href="#i-x"/></svg></b></div>
+            </div>
+          </div>
+        </div>
+        <div class="tag">Listening · text from an earlier take</div>
+      </div>
+
+      <!-- Mic off -->
+      <div>
+        <div class="win">
+          <div class="titlebar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools"><b><svg><use href="#i-clock"/></svg></b><b><svg><use href="#i-gear"/></svg></b></div>
+          </div>
+          <div class="body">
+            <div class="status"><span class="dot grey"></span><span class="txt">Mic is off</span><span class="sw off"></span></div>
+            <div class="stage">
+              <div class="rec off"><svg><use href="#i-mic"/></svg></div>
+              <div class="caption">Turn the mic on to talk</div>
+            </div>
+            <div class="card empty">What you say will appear here.</div>
+          </div>
+        </div>
+        <div class="tag">Mic off</div>
+      </div>
+
+      <!-- Needs attention -->
+      <div>
+        <div class="win">
+          <div class="titlebar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools"><b><svg><use href="#i-clock"/></svg></b><b><svg><use href="#i-gear"/></svg></b></div>
+          </div>
+          <div class="body">
+            <div class="status"><span class="dot orange"></span><span class="txt">Needs attention</span><span class="sw"></span></div>
+            <div class="banner"><svg><use href="#i-warn"/></svg><span>Saywise needs the microphone to hear you.</span><button class="btn">Allow</button></div>
+            <div class="stage" style="height:118px">
+              <div class="rec off"><svg><use href="#i-mic"/></svg></div>
+            </div>
+            <div class="card empty">What you say will appear here.</div>
+          </div>
+        </div>
+        <div class="tag">Permission missing · one banner, never two</div>
+      </div>
+
+      <!-- Loading -->
+      <div>
+        <div class="win">
+          <div class="titlebar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools"><b><svg><use href="#i-clock"/></svg></b><b><svg><use href="#i-gear"/></svg></b></div>
+          </div>
+          <div class="body">
+            <div class="status"><span class="dot grey"></span><span class="txt">Getting ready</span><span class="hint">1.6 GB of 4.1 GB</span><span class="sw"></span></div>
+            <div class="progress"><i></i></div>
+            <div class="stage">
+              <div class="rec off"><svg><use href="#i-mic"/></svg></div>
+              <div class="caption">Getting ready…</div>
+            </div>
+            <div class="card empty">What you say will appear here.</div>
+          </div>
+        </div>
+        <div class="tag">Loading models</div>
+      </div>
+
+      <!-- Finishing -->
+      <div>
+        <div class="win">
+          <div class="titlebar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools"><b><svg><use href="#i-clock"/></svg></b><b><svg><use href="#i-gear"/></svg></b></div>
+          </div>
+          <div class="body">
+            <div class="status"><span class="dot grey"></span><span class="txt">Finishing</span><span class="sw"></span></div>
+            <div class="stage">
+              <div class="rec busy"><div class="spinner"></div></div>
+              <div class="caption">Finishing…</div>
+            </div>
+            <div class="card">Kal 5 baje meeting hai, please join on time. I will send the notes after.
+              <div class="acts"><b><svg><use href="#i-copy"/></svg></b><b><svg><use href="#i-x"/></svg></b></div>
+            </div>
+          </div>
+        </div>
+        <div class="tag">Finishing · text is being cleaned up</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= FLOATING BAR ================= -->
+  <section>
+    <div class="sec-title"><h2>Floating bar</h2><span>one capsule, 36 pt tall, dark in both modes, never takes focus</span></div>
+    <div class="bar-desk">
+      <div class="bar-slot"><div class="bar"><svg><use href="#i-mic"/></svg></div><div class="tag">Idle · 56 pt</div></div>
+      <div class="bar-slot"><div class="tip">Talk · drag to move</div><div class="bar hover"><svg><use href="#i-mic"/></svg></div><div class="tag">Hover</div></div>
+      <div class="bar-slot"><div class="bar live"><span class="rd"></span><div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div class="tag">Listening · 200 pt, live level</div></div>
+      <div class="bar-slot"><div class="bar"><div class="spinner"></div>Finishing</div><div class="tag">Working</div></div>
+      <div class="bar-slot"><div class="bar"><svg class="ok"><use href="#i-clip"/></svg>Copied. Click where you want it and press ⌘V</div><div class="tag">Result · 3 s, only when it could not paste</div></div>
+      <div class="bar-slot"><div class="bar muted"><svg><use href="#i-mic-slash"/></svg></div><div class="tag">Mic off · click turns it on</div></div>
+      <div class="bar-slot"><div class="bar"><svg class="warn"><use href="#i-warn"/></svg>Nothing heard</div><div class="tag">Error · 3 s</div></div>
+    </div>
+
+    <div class="over-app">
+      <div class="fake w1"></div><div class="fake w2"></div><div class="fake w3"></div>
+      <div style="font-size:13px;color:var(--label);margin-top:6px">Kal 5 baje meeting hai, please join on time. <span class="caret"></span></div>
+      <div style="height:70px"></div>
+      <div class="bar live"><span class="rd"></span><div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+    </div>
+    <div class="tag">In place: the bar sits at the bottom of the screen over the app you are typing in. The cursor stays there.</div>
+  </section>
+
+  <!-- ================= FIRST RUN ================= -->
+  <section>
+    <div class="sec-title"><h2>First run</h2><span>480 × 400 pt · one step per page · steps already done are skipped</span></div>
+    <div class="row">
+
+      <div>
+        <div class="ob">
+          <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div></div>
+          <div class="page">
+            <svg class="sym"><use href="#i-wave"/></svg>
+            <h3>Welcome to Saywise</h3>
+            <p>Hold Fn, speak, let go. Your words appear where you type. English, Hindi, or both. Everything stays on this Mac.</p>
+            <button class="btn primary lg">Continue</button>
+          </div>
+          <div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="tag">1 · Welcome</div>
+      </div>
+
+      <div>
+        <div class="ob">
+          <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div></div>
+          <div class="page">
+            <svg class="sym"><use href="#i-mic"/></svg>
+            <h3>Microphone</h3>
+            <p>So Saywise can hear you.</p>
+            <button class="btn primary lg">Allow</button>
+          </div>
+          <div class="dots"><i></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="tag">2 · Permission, before the system asks</div>
+      </div>
+
+      <div>
+        <div class="ob">
+          <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div></div>
+          <div class="page">
+            <svg class="sym"><use href="#i-kbd"/></svg>
+            <h3>Input Monitoring</h3>
+            <p>So Saywise notices when you hold Fn.</p>
+            <div class="check"><svg><use href="#i-check"/></svg>Allowed</div>
+          </div>
+          <div class="dots"><i></i><i></i><i class="on"></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="tag">3 · Granted, moves on by itself after 0.6 s</div>
+      </div>
+
+      <div>
+        <div class="ob">
+          <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div></div>
+          <div class="page">
+            <svg class="sym"><use href="#i-down"/></svg>
+            <h3>Downloading models</h3>
+            <p>About 4 GB, once. After this, Saywise never uses the network.</p>
+            <div class="pbar"><i></i></div>
+            <div class="pct">1.6 GB of 4.1 GB</div>
+          </div>
+          <div class="dots"><i></i><i></i><i></i><i></i><i class="on"></i><i></i></div>
+        </div>
+        <div class="tag">6 · Download</div>
+      </div>
+
+      <div>
+        <div class="ob">
+          <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div></div>
+          <div class="page">
+            <svg class="sym green"><use href="#i-check"/></svg>
+            <h3>You're set</h3>
+            <p>Hold Fn in any app and start talking.</p>
+            <button class="btn primary lg">Open Saywise</button>
+          </div>
+          <div class="dots"><i></i><i></i><i></i><i></i><i></i><i class="on"></i></div>
+        </div>
+        <div class="tag">7 · Done</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= MENU BAR ================= -->
+  <section>
+    <div class="sec-title"><h2>Menu bar</h2><span>status line, two toggles, three windows, quit</span></div>
+    <div class="mb-wrap">
+      <div class="menubar">
+        <span class="sel"><svg class="ic"><use href="#i-wave"/></svg></span>
+        <span style="color:var(--label2)">Wed 10:24</span>
+      </div>
+      <div class="mb-app"></div>
+      <div class="menu">
+        <div class="dis">Ready · hold Fn to talk</div>
+        <hr>
+        <div class="hi">Open Saywise <span class="k">⌘O</span></div>
+        <div class="chk">Mic on</div>
+        <div class="chk">Show floating bar</div>
+        <hr>
+        <div>History…</div>
+        <div>Settings… <span class="k">⌘,</span></div>
+        <hr>
+        <div>Quit Saywise <span class="k">⌘Q</span></div>
+      </div>
+    </div>
+    <div class="tag">"Finish setup…" appears above the last divider only while something is missing.</div>
+  </section>
+
+  <!-- ================= NOTES ================= -->
+  <section>
+    <div class="sec-title"><h2>Why it looks like this</h2></div>
+    <div class="notes">
+      <div class="note"><h4>One bar, not a button and a pill</h4><p>What you click is where the wave appears. One thing to learn, one place to look.</p></div>
+      <div class="note"><h4>Black and white, red when live</h4><p>No brand color. The system accent on controls, system red when the mic is open. It reads as part of macOS.</p></div>
+      <div class="note"><h4>Three parts in the window</h4><p>Status, button, text. Recent dictations moved to History. Settings moved to the toolbar.</p></div>
+      <div class="note"><h4>Two words of status</h4><p>"Ready", "Listening", "Finishing", "Mic is off". The hint after the dot says the one thing you can do next.</p></div>
+      <div class="note"><h4>One step per page</h4><p>Setup asks for one thing at a time, in the order it is needed. Done steps are skipped.</p></div>
+      <div class="note"><h4>Never steals focus</h4><p>The bar is a non-activating panel. Clicking it leaves the cursor in the app you are typing in.</p></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('t-light').setAttribute('aria-pressed', t === 'light');
+    document.getElementById('t-dark').setAttribute('aria-pressed', t === 'dark');
+  }
+  setTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@ struct StatCard: View {
             Text(label).font(.caption).fontWeight(.medium).foregroundStyle(.secondary)
             Text(displayValue)
                 .font(.system(size: 34, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.primary)
                 .contentTransition(.numericText())
             Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }

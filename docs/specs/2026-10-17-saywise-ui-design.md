@@ -1,7 +1,7 @@
 # Saywise UI design
 
 Date: 2026-10-17
-Status: approved in chat, waiting for review of this file
+Status: built on branch saywise-ui, waiting for the owner's visual check
 Replaces: `docs/design/saywise-ui.md` (the earlier "quiet" proposal). Where the two differ, this file wins.
 Implementer: Codex CLI, model `gpt-6.1-sol`, one plan step at a time.
 
