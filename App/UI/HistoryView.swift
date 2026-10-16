@@ -54,7 +54,7 @@ struct HistoryView: View {
     }
 
     private func delete(_ entry: HistoryEntry) async {
-        try? await controller.history?.delete(id: entry.id)
+        await controller.deleteHistoryEntry(entry)
         await reload()
     }
 }

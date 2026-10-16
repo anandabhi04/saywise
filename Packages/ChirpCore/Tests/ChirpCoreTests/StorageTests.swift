@@ -77,6 +77,18 @@ struct StorageTests {
         #expect(SilenceFilter.hasSpeech(loaded))
     }
 
+    @Test func audioClipStoreDeletesOnlyNamedClip() throws {
+        let store = AudioClipStore(directory: tempDir())
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let deleted = try store.save(speechSamples)
+        let kept = try store.save(speechSamples)
+        try store.delete(fileName: deleted)
+        #expect(!FileManager.default.fileExists(atPath: store.directory.appendingPathComponent(deleted).path))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.directory.path) == [kept])
+        // A history row may point to a clip already removed by the retention limit.
+        try store.delete(fileName: deleted)
+    }
+
     @Test func audioClipStoreDeletesAllClips() throws {
         let store = AudioClipStore(directory: tempDir())
         defer { try? FileManager.default.removeItem(at: store.directory) }

@@ -12,7 +12,10 @@ public enum SnippetEngine {
     public static func wholeMatch(_ text: String, in snippets: [Snippet]) -> Snippet? {
         let spoken = TextNormalizer.loose(text)
         guard !spoken.isEmpty else { return nil }
-        return snippets.first { TextNormalizer.loose($0.trigger) == spoken }
+        return snippets.first {
+            !$0.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && TextNormalizer.loose($0.trigger) == spoken
+        }
     }
 
     /// Swaps inline triggers for placeholders so the LLM cannot change them.
@@ -44,7 +47,11 @@ public enum SnippetEngine {
     }
 
     private static func sortedByTriggerLength(_ snippets: [Snippet]) -> [Snippet] {
-        snippets.sorted {
+        var seen = Set<String>()
+        return snippets.filter { snippet in
+            let trigger = snippet.trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return !trigger.isEmpty && seen.insert(trigger).inserted
+        }.sorted {
             $0.trigger.count != $1.trigger.count ? $0.trigger.count > $1.trigger.count : $0.trigger < $1.trigger
         }
     }

@@ -18,6 +18,7 @@ public enum WhisperHints {
         var result: [String] = []
         var used = 0
         for entry in sorted {
+            guard !entry.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
             let cost = entry.word.count + (result.isEmpty ? 0 : 2)
             if used + cost > budget { break }
             result.append(entry.word)

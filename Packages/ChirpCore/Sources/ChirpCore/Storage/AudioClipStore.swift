@@ -42,6 +42,12 @@ public struct AudioClipStore: Sendable {
         return name
     }
 
+    public func delete(fileName: String) throws {
+        let url = directory.appendingPathComponent(fileName)
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
     public func deleteAll() throws {
         guard FileManager.default.fileExists(atPath: directory.path) else { return }
         for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {

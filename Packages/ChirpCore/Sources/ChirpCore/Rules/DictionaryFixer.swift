@@ -5,6 +5,7 @@ public enum DictionaryFixer {
     /// "unify apps platform" wins over "unify apps".
     public static func apply(_ entries: [DictionaryEntry], to text: String) -> String {
         let rules = entries
+            .filter { !$0.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .flatMap { entry in entry.spokenForms.map { (spoken: $0, word: entry.word) } }
             .filter { !$0.spoken.trimmingCharacters(in: .whitespaces).isEmpty }
             .sorted { $0.spoken.count > $1.spoken.count }

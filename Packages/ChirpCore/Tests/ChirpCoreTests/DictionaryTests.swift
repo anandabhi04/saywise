@@ -8,6 +8,13 @@ struct DictionaryTests {
         DictionaryEntry(word: "Nebula", spokenForms: ["nebola"]),
     ]
 
+    @Test func blankDictionaryWordsDoNotEraseSpokenForms() {
+        for word in ["", " \t\n"] {
+            let entry = DictionaryEntry(word: word, spokenForms: ["foo bar"])
+            #expect(DictionaryFixer.apply([entry], to: "say foo bar now") == "say foo bar now")
+        }
+    }
+
     @Test func replacesSpokenFormsIgnoringCase() {
         #expect(DictionaryFixer.apply(entries, to: "I work at Unify Apps on nebola.")
             == "I work at UnifyApps on Nebula.")
@@ -35,6 +42,16 @@ struct DictionaryTests {
     @Test func findsUsedEntries() {
         let used = DictionaryFixer.usedEntryIDs(entries, in: "Ship UnifyApps today")
         #expect(used == [entries[0].id])
+    }
+
+    @Test func hintsIgnoreBlankDictionaryWords() {
+        let entries = [
+            DictionaryEntry(word: ""),
+            DictionaryEntry(word: " \t\n"),
+            DictionaryEntry(word: "Valid"),
+        ]
+        #expect(WhisperHints.words(from: entries) == ["Valid"])
+        #expect(WhisperHints.words(from: entries, budget: 5) == ["Valid"])
     }
 
     @Test func hintsPutRecentWordsFirstAndRespectBudget() {

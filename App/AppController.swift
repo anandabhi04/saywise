@@ -135,6 +135,19 @@ final class AppController {
         }
     }
 
+    func deleteHistoryEntry(_ entry: HistoryEntry) async {
+        guard let history else { return }
+        do {
+            try await history.delete(id: entry.id)
+        } catch {
+            return
+        }
+        if let audioFileName = entry.audioFileName {
+            try? clipStore.delete(fileName: audioFileName)
+        }
+        historyRevision += 1
+    }
+
     func clearHistory() async {
         try? await history?.deleteAll()
         try? clipStore.deleteAll()
