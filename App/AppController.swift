@@ -41,6 +41,7 @@ final class AppController {
     @ObservationIgnored private var loadedCleanerID: String?
     @ObservationIgnored private var isLoadingModels = false
     @ObservationIgnored private var context = AppContext()
+    @ObservationIgnored private var historyPurgeTimer: Task<Void, Never>?
     @ObservationIgnored private var handsFreeTimer: Task<Void, Never>?
 
     init() {
@@ -65,6 +66,15 @@ final class AppController {
     func start() {
         hotkey.triggerKey = settings.triggerKey
         startHotkeyIfAllowed()
+        historyPurgeTimer?.cancel()
+        historyPurgeTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(86_400)) }
+                catch { return }
+                guard let self else { return }
+                await self.purgeHistory()
+            }
+        }
         Task {
             await purgeHistory()
             await loadModels()
@@ -319,7 +329,11 @@ final class AppController {
             try? await history?.deleteAll()
             try? clipStore.deleteAll()
         } else {
-            _ = try? await history?.purge(olderThan: Date().addingTimeInterval(-Double(days) * 86_400))
+            if let purged = try? await history?.purge(olderThan: Date().addingTimeInterval(-Double(days) * 86_400)) {
+                for fileName in purged.audioFileNames {
+                    try? clipStore.delete(fileName: fileName)
+                }
+            }
         }
         historyRevision += 1
     }

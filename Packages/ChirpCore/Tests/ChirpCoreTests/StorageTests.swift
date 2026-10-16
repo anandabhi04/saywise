@@ -52,10 +52,29 @@ struct StorageTests {
         try await store.save(entry("b", at: 200))
         try await store.save(entry("c", at: 300))
         try await store.delete(id: a.id)
-        #expect(try await store.purge(olderThan: Date(timeIntervalSince1970: 250)) == 1)
+        #expect(try await store.purge(olderThan: Date(timeIntervalSince1970: 250)).deletedCount == 1)
         #expect(try await store.recent().map(\.finalText) == ["c"])
         try await store.deleteAll()
         #expect(try await store.recent().isEmpty)
+    }
+
+    @Test func historyPurgeReturnsOnlyDeletedAudioFileNames() async throws {
+        let store = try HistoryStore()
+        var old = entry("old", at: 100)
+        old.audioFileName = "old.wav"
+        var boundary = entry("boundary", at: 200)
+        boundary.audioFileName = "kept.wav"
+        try await store.save(old)
+        try await store.save(entry("no audio", at: 150))
+        try await store.save(boundary)
+
+        let result = try await store.purge(olderThan: Date(timeIntervalSince1970: 200))
+        #expect(result.deletedCount == 2)
+        #expect(result.audioFileNames == ["old.wav"])
+        #expect(try await store.recent().map(\.id) == [boundary.id])
+        let empty = try await store.purge(olderThan: Date(timeIntervalSince1970: 200))
+        #expect(empty.deletedCount == 0)
+        #expect(empty.audioFileNames.isEmpty)
     }
 
     @Test func historyFileOnDiskPersists() async throws {

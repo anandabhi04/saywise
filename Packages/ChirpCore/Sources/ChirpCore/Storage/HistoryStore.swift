@@ -67,9 +67,19 @@ public final class HistoryStore: HistoryWriting, Sendable {
         _ = try await db.write { try HistoryEntry.deleteAll($0) }
     }
 
-    /// Deletes rows older than `date`. Returns how many were deleted.
+    /// Deletes rows and returns their clip names in the same transaction.
+    public struct PurgeResult: Sendable {
+        public let deletedCount: Int
+        public let audioFileNames: [String]
+    }
+
     @discardableResult
-    public func purge(olderThan date: Date) async throws -> Int {
-        try await db.write { try HistoryEntry.filter(Column("createdAt") < date).deleteAll($0) }
+    public func purge(olderThan date: Date) async throws -> PurgeResult {
+        try await db.write { db in
+            let expired = HistoryEntry.filter(Column("createdAt") < date)
+            let audioFileNames = try expired.fetchAll(db).compactMap(\.audioFileName)
+            let deletedCount = try expired.deleteAll(db)
+            return PurgeResult(deletedCount: deletedCount, audioFileNames: audioFileNames)
+        }
     }
 }
