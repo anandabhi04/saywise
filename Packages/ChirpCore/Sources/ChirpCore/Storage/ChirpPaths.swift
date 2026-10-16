@@ -7,7 +7,7 @@ public struct ChirpPaths: Sendable {
 
     public static let standard = ChirpPaths(
         root: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Chirp", isDirectory: true))
+            .appendingPathComponent("Saywise", isDirectory: true))
 
     public var settingsFile: URL { root.appendingPathComponent("settings.json") }
     public var historyDatabase: URL { root.appendingPathComponent("history.sqlite") }

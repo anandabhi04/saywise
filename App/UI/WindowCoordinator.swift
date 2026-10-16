@@ -12,21 +12,21 @@ final class WindowCoordinator {
 
     func showSetup() {
         guard let controller else { return }
-        show("setup", title: "Set up Chirp", size: NSSize(width: 600, height: 520)) {
+        show("setup", title: "Set up Saywise", size: NSSize(width: 600, height: 520)) {
             SetupView(controller: controller)
         }
     }
 
     func showSettings() {
         guard let controller else { return }
-        show("settings", title: "Chirp Settings", size: NSSize(width: 680, height: 520)) {
+        show("settings", title: "Saywise Settings", size: NSSize(width: 680, height: 520)) {
             SettingsView(controller: controller)
         }
     }
 
     func showHistory() {
         guard let controller else { return }
-        show("history", title: "Chirp History", size: NSSize(width: 820, height: 560)) {
+        show("history", title: "Saywise History", size: NSSize(width: 820, height: 560)) {
             HistoryView(controller: controller)
         }
     }

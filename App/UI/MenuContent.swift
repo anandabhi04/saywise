@@ -10,12 +10,12 @@ struct MenuContent: View {
         Button("History…") { WindowCoordinator.shared.showHistory() }
         Button("Settings…") { WindowCoordinator.shared.showSettings() }
             .keyboardShortcut(",")
-        Button(controller.status == .paused ? "Resume Chirp" : "Pause Chirp") { controller.togglePause() }
+        Button(controller.status == .paused ? "Resume Saywise" : "Pause Saywise") { controller.togglePause() }
         if controller.shouldShowSetup {
             Button("Finish setup…") { WindowCoordinator.shared.showSetup() }
         }
         Divider()
-        Button("Quit Chirp") { NSApp.terminate(nil) }
+        Button("Quit Saywise") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 }

@@ -1,6 +1,6 @@
 name: Chirp
 options:
-  bundleIdPrefix: dev.chirp
+  bundleIdPrefix: dev.saywise
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -31,12 +31,12 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Chirp
+        CFBundleDisplayName: Saywise
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         LSUIElement: true
         LSMinimumSystemVersion: "15.0"
-        NSMicrophoneUsageDescription: Chirp records your voice only while you hold the dictation key.
+        NSMicrophoneUsageDescription: Saywise records your voice only while you hold the dictation key.
     entitlements:
       path: App/Chirp.entitlements
       properties:
@@ -44,8 +44,8 @@ targets:
         com.apple.security.device.audio-input: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.chirp.app
-        PRODUCT_NAME: Chirp
+        PRODUCT_BUNDLE_IDENTIFIER: dev.saywise.app
+        PRODUCT_NAME: Saywise
   ChirpBench:
     type: tool
     platform: macOS

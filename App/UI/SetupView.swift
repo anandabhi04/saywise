@@ -8,7 +8,7 @@ struct SetupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Set up Chirp").font(.title2.bold())
+            Text("Set up Saywise").font(.title2.bold())
             if let error = controller.settingsError {
                 Text(error).foregroundStyle(.orange)
             }
@@ -43,10 +43,10 @@ struct SetupView: View {
             ModelStatusView(controller: controller)
             Spacer()
             HStack {
-                Text("After you allow Input Monitoring, restart Chirp once.")
+                Text("After you allow Input Monitoring, restart Saywise once.")
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
-                Button("Restart Chirp") { AppRelauncher.relaunch() }
+                Button("Restart Saywise") { AppRelauncher.relaunch() }
             }
         }
         .padding(24)

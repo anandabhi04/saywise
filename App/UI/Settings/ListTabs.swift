@@ -7,7 +7,7 @@ struct DictionaryTab: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Words Chirp must spell exactly. \"Heard as\" lists what the speech model writes instead, separated by commas.")
+            Text("Words Saywise must spell exactly. \"Heard as\" lists what the speech model writes instead, separated by commas.")
                 .font(.callout).foregroundStyle(.secondary)
             List {
                 ForEach($controller.settings.dictionary) { $entry in
@@ -41,7 +41,7 @@ struct SnippetsTab: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Say the trigger and Chirp types the text. Example: \"my email\".")
+            Text("Say the trigger and Saywise types the text. Example: \"my email\".")
                 .font(.callout).foregroundStyle(.secondary)
             List {
                 ForEach($controller.settings.snippets) { $snippet in

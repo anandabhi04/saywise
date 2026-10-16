@@ -57,7 +57,7 @@ final class AppController {
             try? FileManager.default.removeItem(at: backup)
             try? FileManager.default.moveItem(at: paths.settingsFile, to: backup)
             settings = ChirpSettings()
-            settingsError = "The settings file was broken. A copy is saved as settings.broken.json. Chirp started with default settings."
+            settingsError = "The settings file was broken. A copy is saved as settings.broken.json. Saywise started with default settings."
         }
         history = try? HistoryStore(path: paths.historyDatabase.path)
         recorder.onLevel = { [weak self] level in self?.pill.model.push(level) }
