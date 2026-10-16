@@ -1,57 +1,56 @@
 import AppKit
+import ChirpCore
 import SwiftUI
 
-/// Opens and reuses the main, Setup, Settings and History windows. They are plain
-/// AppKit windows hosting SwiftUI views, because the app's only scene is the menu bar extra.
+/// One main window (sidebar + pages) and one setup window, both AppKit windows hosting SwiftUI,
+/// because the app's only scene is the menu bar extra.
 @MainActor
 final class WindowCoordinator {
     static let shared = WindowCoordinator()
 
     var controller: AppController?
+    let rootState = RootState()
     private var windows: [String: NSWindow] = [:]
 
-    func showMain() {
+    func showMain(page: Page? = nil, focusingHistory id: HistoryEntry.ID? = nil) {
         guard let controller else { return }
-        show("main", title: "Saywise", size: NSSize(width: 520, height: 700)) {
-            MainView(controller: controller)
+        if let page { rootState.page = page }
+        if let id { rootState.page = .history; rootState.historyFocus = id }
+        show("main", size: NSSize(width: 980, height: 640), minSize: NSSize(width: 820, height: 560)) {
+            RootView(controller: controller, state: rootState)
         }
     }
 
+    func showHistory() { showMain(page: .history) }
+    func showSettings() { showMain(page: .settings) }
+
     func showSetup() {
         guard let controller else { return }
-        show("setup", title: "Set up Saywise", size: NSSize(width: 600, height: 520)) {
+        show("setup", size: NSSize(width: 480, height: 420), minSize: nil, resizable: false) {
             SetupView(controller: controller)
         }
     }
 
-    func showSettings() {
-        guard let controller else { return }
-        show("settings", title: "Saywise Settings", size: NSSize(width: 680, height: 520)) {
-            SettingsView(controller: controller)
-        }
-    }
-
-    func showHistory() {
-        guard let controller else { return }
-        show("history", title: "Saywise History", size: NSSize(width: 820, height: 560)) {
-            HistoryView(controller: controller)
-        }
-    }
+    func closeSetup() { windows["setup"]?.close() }
 
     private func show<Content: View>(
-        _ id: String, title: String, size: NSSize, @ViewBuilder content: () -> Content
+        _ id: String, size: NSSize, minSize: NSSize?, resizable: Bool = true,
+        @ViewBuilder content: () -> Content
     ) {
         if let window = windows[id] {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate()
             return
         }
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered, defer: false)
-        window.title = title
+        var mask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        if resizable { mask.insert(.resizable) }
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: mask, backing: .buffered, defer: false)
+        window.title = "Saywise"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = !resizable
+        if let minSize { window.minSize = minSize }
         window.contentViewController = NSHostingController(rootView: content())
         window.setContentSize(size)
         window.center()
