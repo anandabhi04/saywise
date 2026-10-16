@@ -197,8 +197,13 @@ final class AppController {
             history: settings.historyRetention == .off ? nil : history)
         Task {
             let outcome = await pipeline.run(input)
-            if case .noSpeech = outcome, let audioFileName {
-                try? FileManager.default.removeItem(at: paths.audioDirectory.appendingPathComponent(audioFileName))
+            switch outcome {
+            case .noSpeech, .transcriptionFailed:
+                if let audioFileName {
+                    try? FileManager.default.removeItem(at: paths.audioDirectory.appendingPathComponent(audioFileName))
+                }
+            case .delivered:
+                break
             }
             finish(outcome)
         }

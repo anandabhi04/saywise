@@ -17,6 +17,13 @@ final class WindowCoordinator {
         }
     }
 
+    func showSettings() {
+        guard let controller else { return }
+        show("settings", title: "Chirp Settings", size: NSSize(width: 680, height: 520)) {
+            SettingsView(controller: controller)
+        }
+    }
+
     private func show<Content: View>(
         _ id: String, title: String, size: NSSize, @ViewBuilder content: () -> Content
     ) {

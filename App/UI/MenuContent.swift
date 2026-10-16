@@ -7,6 +7,8 @@ struct MenuContent: View {
     var body: some View {
         Text(controller.statusText)
         Divider()
+        Button("Settings…") { WindowCoordinator.shared.showSettings() }
+            .keyboardShortcut(",")
         Button(controller.status == .paused ? "Resume Chirp" : "Pause Chirp") { controller.togglePause() }
         if controller.shouldShowSetup {
             Button("Finish setup…") { WindowCoordinator.shared.showSetup() }
