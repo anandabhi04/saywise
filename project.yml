@@ -46,3 +46,14 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.chirp.app
         PRODUCT_NAME: Chirp
+  ChirpBench:
+    type: tool
+    platform: macOS
+    sources:
+      - Bench
+    configFiles:
+      Debug: Local.xcconfig
+      Release: Local.xcconfig
+    dependencies:
+      - package: ChirpCore
+      - package: ChirpEngines
