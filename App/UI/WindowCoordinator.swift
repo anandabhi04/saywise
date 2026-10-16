@@ -24,6 +24,13 @@ final class WindowCoordinator {
         }
     }
 
+    func showHistory() {
+        guard let controller else { return }
+        show("history", title: "Chirp History", size: NSSize(width: 820, height: 560)) {
+            HistoryView(controller: controller)
+        }
+    }
+
     private func show<Content: View>(
         _ id: String, title: String, size: NSSize, @ViewBuilder content: () -> Content
     ) {
