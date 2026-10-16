@@ -48,8 +48,6 @@ public struct DictationPipeline: Sendable {
         timings.transcribeMs = (clock.now - transcribeStart).milliseconds
         if HallucinationFilter.isLikely(raw, speechSeconds: speechSeconds) { return .noSpeech }
 
-        // The LLM sees the original script, which carries more meaning than our romanization.
-        // Every fallback path uses the romanized text.
         let fixedRaw = DictionaryFixer.apply(settings.dictionary, to: raw)
         let fallback = DictionaryFixer.apply(settings.dictionary, to: Romanizer.romanize(fixedRaw))
 
@@ -63,7 +61,7 @@ public struct DictationPipeline: Sendable {
             text = SnippetEngine.expandInline(fallback, snippets: settings.snippets)
             cleanup = .skipped
         } else {
-            (text, cleanup) = await cleaned(fixedRaw: fixedRaw, fallback: fallback, style: style, settings: settings)
+            (text, cleanup) = await cleaned(fallback, style: style, settings: settings)
         }
         timings.cleanupMs = (clock.now - cleanupStart).milliseconds
         if cleanup != .snippet { text = StyleFinisher.finish(text, style: style) }
@@ -85,14 +83,14 @@ public struct DictationPipeline: Sendable {
     }
 
     private func cleaned(
-        fixedRaw: String, fallback: String, style: Style, settings: ChirpSettings
+        _ fallback: String, style: Style, settings: ChirpSettings
     ) async -> (String, CleanupStatus) {
-        let llmInput = SnippetEngine.protect(fixedRaw, snippets: settings.snippets)
-        let safeInput = SnippetEngine.protect(fallback, snippets: settings.snippets)
+        // The LLM gets Roman letters. Given Devanagari, it translated Hindi into English.
+        let llmInput = SnippetEngine.protect(fallback, snippets: settings.snippets)
         let request = CleanupPromptBuilder.build(
             text: llmInput.text, style: style, dictionaryWords: settings.dictionary.map(\.word))
         let reject = { (reason: CleanupRejection) in
-            (SnippetEngine.expand(safeInput.text, using: safeInput.expansions), CleanupStatus.rejected(reason))
+            (SnippetEngine.expand(llmInput.text, using: llmInput.expansions), CleanupStatus.rejected(reason))
         }
         let output: String
         do {
@@ -104,7 +102,7 @@ public struct DictationPipeline: Sendable {
         }
         let candidate = Romanizer.romanize(CleanupPromptBuilder.extractOutput(output))
         if let reason = SafetyCheck.evaluate(
-            input: safeInput.text, output: candidate, placeholders: Array(llmInput.expansions.keys)) {
+            input: llmInput.text, output: candidate, placeholders: Array(llmInput.expansions.keys)) {
             return reject(reason)
         }
         return (SnippetEngine.expand(candidate, using: llmInput.expansions), .used)

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum CleanupRejection: String, Codable, Sendable {
-    case timeout, failed, empty, tooShort, tooLong, placeholderChanged, looksLikeAnswer
+    case timeout, failed, empty, tooShort, tooLong, placeholderChanged, looksLikeAnswer, translated
 }
 
 public enum SafetyCheck {
@@ -18,7 +18,30 @@ public enum SafetyCheck {
         if ratio > maxRatio { return .tooLong }
         if placeholderSet(in: trimmed) != Set(placeholders) { return .placeholderChanged }
         if looksLikeAnswer(input: input, output: trimmed) { return .looksLikeAnswer }
+        if looksTranslated(input: input, output: trimmed) { return .translated }
         return nil
+    }
+
+    static let minSharedWords = 0.5
+
+    /// A cleanup keeps the speaker's words. A translation shares almost none of them.
+    /// Words are compared by their consonants, so "sakate" and "sakte" or "men" and "mein" match.
+    static func looksTranslated(input: String, output: String) -> Bool {
+        let outputWords = words(output)
+        guard outputWords.count >= 4 else { return false }
+        let spoken = Set(words(input).map(skeleton))
+        let shared = outputWords.filter { spoken.contains(skeleton($0)) }.count
+        return Double(shared) / Double(outputWords.count) < minSharedWords
+    }
+
+    private static func words(_ text: String) -> [String] {
+        text.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+    }
+
+    private static func skeleton(_ word: String) -> String {
+        var out = ""
+        for c in word where !"aeiou".contains(c) && out.last != c { out.append(c) }
+        return out.isEmpty ? word : out
     }
 
     static func placeholderSet(in text: String) -> Set<String> {

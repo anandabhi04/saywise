@@ -34,4 +34,19 @@ struct SafetyCheckTests {
         #expect(SafetyCheck.evaluate(input: question, output: "Sure! It is Paris.", placeholders: []) == .looksLikeAnswer)
         #expect(SafetyCheck.evaluate(input: "sure i will be there at five", output: "Sure, I will be there at 5.", placeholders: []) == nil)
     }
+
+    @Test func rejectsHindiTranslatedToEnglish() {
+        let spoken = Romanizer.romanize("क्या मेरी हिंदी तुम समझ सकते हो भाई")
+        #expect(SafetyCheck.evaluate(input: spoken, output: "Can you understand my Hindi, brother?", placeholders: []) == .translated)
+    }
+
+    @Test func acceptsOtherSpellingsOfTheSameHindiWords() {
+        let spoken = Romanizer.romanize("क्या तुम हिंगलिस में लिख सकते हो मेरी चीजे")
+        #expect(SafetyCheck.evaluate(input: spoken, output: "kya tum hinglish mein likh sakte ho meri cheezein?", placeholders: []) == nil)
+    }
+
+    @Test func acceptsHinglishCleanup() {
+        let input = "um kal ki meeting matlab cancel ho gayi hai kya"
+        #expect(SafetyCheck.evaluate(input: input, output: "Kal ki meeting cancel ho gayi hai kya?", placeholders: []) == nil)
+    }
 }

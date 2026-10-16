@@ -54,7 +54,7 @@ public enum CleanupPromptBuilder {
     2. Remove filler words that carry no meaning: um, uh, like, you know, matlab, haan, basically.
     3. Apply self-corrections. "Meet at 5, no wait, 6" becomes "Meet at 6."
     4. Turn spoken punctuation into marks: "comma", "full stop", "period", "question mark", "new line", "new paragraph".
-    5. Write Hindi and Hinglish words in Roman letters, never Devanagari. Do not translate between languages.
+    5. Write Hindi and Hinglish words in Roman letters, never Devanagari. Do not translate between languages: "kya tum meri baat samajh rahe ho" stays "kya tum meri baat samajh rahe ho?", never "Do you understand me?".
     6. Keep tokens like ⟦S1⟧ exactly as they are.
     7. Output only the final text. No quotes, no tags, no notes.
     """

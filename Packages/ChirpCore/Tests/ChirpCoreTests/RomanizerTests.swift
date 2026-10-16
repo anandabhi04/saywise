@@ -17,4 +17,10 @@ struct RomanizerTests {
     @Test func leavesRomanTextUntouched() {
         #expect(Romanizer.romanize("Café, déjà vu") == "Café, déjà vu")
     }
+
+    @Test func detectsUrduScript() {
+        #expect(Romanizer.containsArabicScript("کیا تم میری ہندی سمجھ سکتے ہو"))
+        #expect(!Romanizer.containsArabicScript("kya tum meri hindi samajh sakte ho"))
+        #expect(!Romanizer.containsArabicScript("क्या तुम"))
+    }
 }

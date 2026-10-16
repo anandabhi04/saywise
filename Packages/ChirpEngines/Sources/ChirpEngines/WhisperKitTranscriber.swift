@@ -60,6 +60,17 @@ public actor WhisperKitTranscriber: Transcriber {
                 .filter { $0 < tokenizer.specialTokens.specialTokenBegin }
             options.promptTokens = Array(tokens.prefix(Self.maxPromptTokens))
         }
+        var text = try await run(samples, options)
+        // Auto-detect sometimes hears Hindi as Urdu. The romanizer reads only Devanagari, so ask again as Hindi.
+        if language == .auto && Romanizer.containsArabicScript(text) {
+            options.language = Self.code(for: .hindi)
+            options.detectLanguage = false
+            text = try await run(samples, options)
+        }
+        return text
+    }
+
+    private func run(_ samples: [Float], _ options: DecodingOptions) async throws -> String {
         let results = try await kit.transcribe(audioArray: samples, decodeOptions: options)
         return results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -7,6 +7,11 @@ public enum Romanizer {
         text.unicodeScalars.contains { (0x0900...0x097F).contains($0.value) }
     }
 
+    /// Whisper sometimes writes Hindi speech in Urdu letters.
+    public static func containsArabicScript(_ text: String) -> Bool {
+        text.unicodeScalars.contains { (0x0600...0x06FF).contains($0.value) }
+    }
+
     public static func romanize(_ text: String) -> String {
         guard containsDevanagari(text) else { return text }
         let all = Array(text.unicodeScalars)

@@ -179,6 +179,25 @@ struct DictationPipelineTests {
         #expect(result?.finalText == "kal meeting hai, 5 baje?")
     }
 
+    @Test func cleanerSeesHindiInRomanLetters() async {
+        let cleaner = FakeCleaner(reply: { request in
+            #expect(!Romanizer.containsDevanagari(request.userMessage))
+            #expect(request.userMessage.contains("kya"))
+            return "kya meri hindi tum samajh sakte ho bhai?"
+        })
+        let result = delivered(await pipeline(transcript: "क्या मेरी हिंदी तुम समझ सकते हो भाई", cleaner: cleaner)
+            .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings())))
+        #expect(result?.cleanup == .used)
+    }
+
+    @Test func translatedCleanupFallsBackToRomanLetters() async {
+        let cleaner = FakeCleaner(reply: { _ in "Can you understand my Hindi, brother?" })
+        let result = delivered(await pipeline(transcript: "क्या मेरी हिंदी तुम समझ सकते हो भाई", cleaner: cleaner)
+            .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings())))
+        #expect(result?.cleanup == .rejected(.translated))
+        #expect(result?.finalText == Romanizer.romanize("क्या मेरी हिंदी तुम समझ सकते हो भाई"))
+    }
+
     @Test func noHistoryWhenStoreIsNil() async {
         let result = delivered(await pipeline(transcript: "this is a longer sentence here", history: nil)
             .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings())))
