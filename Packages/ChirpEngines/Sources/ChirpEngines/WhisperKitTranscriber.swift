@@ -15,14 +15,35 @@ public actor WhisperKitTranscriber: Transcriber {
     public static func load(
         modelsDirectory: URL, progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> WhisperKitTranscriber {
-        // Download first (a no-op when the files are there) so the setup window can show progress.
-        let folder = try await WhisperKit.download(
-            variant: modelName,
-            downloadBase: modelsDirectory.appendingPathComponent("whisperkit", isDirectory: true),
-            progressCallback: { progress($0.fractionCompleted) })
+        let base = modelsDirectory.appendingPathComponent("whisperkit", isDirectory: true)
+        let folder: URL
+        if let existing = downloadedModelFolder(in: base) {
+            // WhisperKit.download always asks the Hub for the file list, so skip it once the model is on disk.
+            folder = existing
+        } else {
+            folder = try await WhisperKit.download(
+                variant: modelName, downloadBase: base,
+                progressCallback: { progress($0.fractionCompleted) })
+        }
+        // tokenizerFolder keeps the tokenizer under Chirp's folder: saved on the first load, found there after.
         let config = WhisperKitConfig(
-            modelFolder: folder.path, verbose: false, prewarm: true, load: true, download: false)
+            modelFolder: folder.path, tokenizerFolder: base,
+            verbose: false, prewarm: true, load: true, download: false)
         return WhisperKitTranscriber(kit: try await WhisperKit(config))
+    }
+
+    /// The folder WhisperKit.download fills: <base>/models/argmaxinc/whisperkit-coreml/openai_whisper-<variant>.
+    /// Files are moved into place only when complete, so a Core ML bundle that has its coremldata.bin is whole.
+    static func downloadedModelFolder(in base: URL) -> URL? {
+        let folder = base
+            .appendingPathComponent("models/argmaxinc/whisperkit-coreml", isDirectory: true)
+            .appendingPathComponent("openai_whisper-\(modelName)", isDirectory: true)
+        let required = ["config.json", "MelSpectrogram.mlmodelc/coremldata.bin",
+                        "AudioEncoder.mlmodelc/coremldata.bin", "TextDecoder.mlmodelc/coremldata.bin"]
+        let complete = required.allSatisfy {
+            FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
+        }
+        return complete ? folder : nil
     }
 
     public func transcribe(_ samples: [Float], language: LanguageMode, hints: [String]) async throws -> String {
