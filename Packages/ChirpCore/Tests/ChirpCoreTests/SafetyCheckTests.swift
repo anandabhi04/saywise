@@ -25,6 +25,10 @@ struct SafetyCheckTests {
         #expect(SafetyCheck.evaluate(input: protectedInput, output: "Please send it to ⟦S1⟧ by tonight.", placeholders: ["⟦S1⟧"]) == nil)
     }
 
+    @Test func openerAnywhereInInputIsTheSpeakers() {
+        #expect(SafetyCheck.evaluate(input: "um i can come at five", output: "I can come at five.", placeholders: []) == nil)
+    }
+
     @Test func rejectsAnswersButNotSpeakerWhoSaidSure() {
         let question = "what is the capital of france"
         #expect(SafetyCheck.evaluate(input: question, output: "Sure! It is Paris.", placeholders: []) == .looksLikeAnswer)

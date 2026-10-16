@@ -29,13 +29,17 @@ public enum SafetyCheck {
         })
     }
 
-    /// "Sure, here is..." is an answer, unless the speaker also started with "sure".
+    /// "Sure, here is..." is an answer, unless the speaker said that word or phrase too.
     static func looksLikeAnswer(input: String, output: String) -> Bool {
         let out = output.lowercased()
-        let inp = input.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         return answerOpeners.contains { opener in
-            startsWithWord(out, opener) && !startsWithWord(inp, opener)
+            startsWithWord(out, opener) && !containsWholeWord(input, opener)
         }
+    }
+
+    private static func containsWholeWord(_ text: String, _ phrase: String) -> Bool {
+        guard let regex = TextNormalizer.wholeWordRegex(phrase) else { return false }
+        return regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
     private static func startsWithWord(_ text: String, _ word: String) -> Bool {

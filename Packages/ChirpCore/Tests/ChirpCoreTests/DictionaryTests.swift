@@ -22,6 +22,16 @@ struct DictionaryTests {
         #expect(DictionaryFixer.apply(entries, to: "unify apps") == "UnifyApps")
     }
 
+    @Test func wholeWordTreatsDevanagariMatraAsPartOfWord() throws {
+        let regex = try #require(TextNormalizer.wholeWordRegex("कल"))
+        func matches(_ text: String) -> Bool {
+            regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        }
+        #expect(!matches("कला"))
+        #expect(matches("कल"))
+        #expect(matches("आज कल है"))
+    }
+
     @Test func findsUsedEntries() {
         let used = DictionaryFixer.usedEntryIDs(entries, in: "Ship UnifyApps today")
         #expect(used == [entries[0].id])

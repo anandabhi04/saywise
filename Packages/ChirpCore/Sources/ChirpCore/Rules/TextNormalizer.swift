@@ -17,7 +17,7 @@ enum TextNormalizer {
 
     /// A case-insensitive regex for `phrase` that only matches whole words.
     static func wholeWordRegex(_ phrase: String) -> NSRegularExpression? {
-        let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: phrase) + "(?![\\p{L}\\p{N}])"
+        let pattern = "(?<![\\p{L}\\p{N}\\p{M}])" + NSRegularExpression.escapedPattern(for: phrase) + "(?![\\p{L}\\p{N}\\p{M}])"
         return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }
 }

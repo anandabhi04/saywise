@@ -30,4 +30,9 @@ struct FilterTests {
         #expect(HallucinationFilter.isLikely("  ", speechSeconds: 5))
         #expect(!HallucinationFilter.isLikely("Thank you, Priya", speechSeconds: 0.5))
     }
+
+    @Test func keepsShortRealThankYou() {
+        #expect(!HallucinationFilter.isLikely("Thank you.", speechSeconds: 0.6))
+        #expect(HallucinationFilter.isLikely("Thank you for watching.", speechSeconds: 0.6))
+    }
 }

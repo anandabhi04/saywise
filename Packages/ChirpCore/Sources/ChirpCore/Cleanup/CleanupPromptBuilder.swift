@@ -18,9 +18,10 @@ public enum CleanupPromptBuilder {
     }
 
     /// Spec: 2 x input tokens + 50. About 3 characters per token is a safe guess
-    /// for English and romanized Hindi.
+    /// for English and romanized Hindi. Devanagari is counted by its romanized length,
+    /// because it has about half as many characters and the model writes Roman letters.
     static func maxTokens(for text: String) -> Int {
-        let inputTokens = (text.count + 2) / 3
+        let inputTokens = (Romanizer.romanize(text).count + 2) / 3
         return inputTokens * 2 + 50
     }
 
