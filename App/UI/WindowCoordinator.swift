@@ -27,7 +27,7 @@ final class WindowCoordinator {
     func showSetup() {
         guard let controller else { return }
         show("setup", size: NSSize(width: 480, height: 420), minSize: nil, resizable: false) {
-            SetupView(controller: controller)
+            OnboardingView(controller: controller)
         }
     }
 

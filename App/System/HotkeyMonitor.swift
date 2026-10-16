@@ -6,6 +6,8 @@ final class HotkeyMonitor {
     var onEvent: ((HotkeyEvent) -> Void)?
     var triggerKey: TriggerKey = .fn
 
+    private(set) var isRunning = false
+
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var isDown = false
@@ -24,8 +26,9 @@ final class HotkeyMonitor {
                 return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque())
-        else { return false }
+        else { isRunning = false; return false }
         self.tap = tap
+        isRunning = true
         source = CFMachPortCreateRunLoopSource(nil, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)

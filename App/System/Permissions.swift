@@ -17,9 +17,9 @@ enum Permission: String, CaseIterable, Identifiable {
 
     var reason: String {
         switch self {
-        case .microphone: "To hear you while you hold the key."
-        case .accessibility: "To paste text and see which app is in front."
-        case .inputMonitoring: "To notice when you press the dictation key."
+        case .microphone: "So Saywise can hear you."
+        case .accessibility: "So Saywise can paste into other apps."
+        case .inputMonitoring: "So Saywise notices when you hold Fn."
         }
     }
 

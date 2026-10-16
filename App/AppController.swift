@@ -73,6 +73,8 @@ final class AppController {
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
     }
 
+    var hotkeyIsRunning: Bool { hotkey.isRunning }
+
     var needsSetup: Bool { Permission.allCases.contains { !$0.isGranted } }
 
     func start() {
@@ -406,7 +408,7 @@ final class AppController {
 
     var shouldShowSetup: Bool {
         switch status {
-        case .loadingModels, .failed: true
+        case .starting, .loadingModels, .failed: true
         default: needsSetup
         }
     }

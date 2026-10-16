@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WindowCoordinator.shared.controller = controller
         controller.start()
         WindowCoordinator.shared.showMain()
-        if controller.needsSetup || controller.settingsError != nil {
+        if controller.shouldShowSetup || controller.settingsError != nil {
             WindowCoordinator.shared.showSetup()
         }
     }
