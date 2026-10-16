@@ -35,6 +35,7 @@ final class HotkeyMonitor {
     private func handle(type: CGEventType, event: CGEvent) {
         // macOS turns a tap off if a callback is slow. Turn it back on.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            isDown = false
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return
         }

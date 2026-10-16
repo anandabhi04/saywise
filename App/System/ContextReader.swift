@@ -8,6 +8,7 @@ enum ContextReader {
         var title: String?
         if let pid = app?.processIdentifier {
             let axApp = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(axApp, 0.25)
             // Electron apps (Slack, VS Code) only expose their text fields after this is set.
             AXUIElementSetAttributeValue(axApp, "AXManualAccessibility" as CFString, kCFBooleanTrue)
             if let window = element(axApp, kAXFocusedWindowAttribute) {
@@ -19,11 +20,14 @@ enum ContextReader {
 
     /// AX role of the focused element, or nil when nothing has focus.
     static func focusedRole() -> String? {
-        guard let focused = element(AXUIElementCreateSystemWide(), kAXFocusedUIElementAttribute) else { return nil }
+        let systemWide = AXUIElementCreateSystemWide()
+        AXUIElementSetMessagingTimeout(systemWide, 0.25)
+        guard let focused = element(systemWide, kAXFocusedUIElementAttribute) else { return nil }
         return string(focused, kAXRoleAttribute)
     }
 
     private static func element(_ parent: AXUIElement, _ name: String) -> AXUIElement? {
+        AXUIElementSetMessagingTimeout(parent, 0.25)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(parent, name as CFString, &value) == .success,
               let value, CFGetTypeID(value) == AXUIElementGetTypeID()
@@ -32,6 +36,7 @@ enum ContextReader {
     }
 
     private static func string(_ parent: AXUIElement, _ name: String) -> String? {
+        AXUIElementSetMessagingTimeout(parent, 0.25)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(parent, name as CFString, &value) == .success else { return nil }
         return value as? String
