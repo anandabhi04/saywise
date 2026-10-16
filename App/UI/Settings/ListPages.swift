@@ -7,8 +7,6 @@ struct DictionaryTab: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Words Saywise must spell exactly. \"Heard as\" lists what the speech model writes instead, separated by commas.")
-                .font(.callout).foregroundStyle(.secondary)
             List {
                 ForEach($controller.settings.dictionary) { $entry in
                     HStack {
@@ -21,6 +19,9 @@ struct DictionaryTab: View {
                     }
                 }
             }
+            .frame(minHeight: 320)
+            .scrollContentBackground(.hidden)
+            .card(padding: 0)
             Button("Add word") { controller.settings.dictionary.append(DictionaryEntry(word: "")) }
         }
     }
@@ -41,8 +42,6 @@ struct SnippetsTab: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Say the trigger and Saywise types the text. Example: \"my email\".")
-                .font(.callout).foregroundStyle(.secondary)
             List {
                 ForEach($controller.settings.snippets) { $snippet in
                     HStack(alignment: .top) {
@@ -55,6 +54,9 @@ struct SnippetsTab: View {
                     }
                 }
             }
+            .frame(minHeight: 320)
+            .scrollContentBackground(.hidden)
+            .card(padding: 0)
             Button("Add snippet") { controller.settings.snippets.append(Snippet(trigger: "", expansion: "")) }
         }
     }
@@ -104,6 +106,8 @@ struct AppStylesTab: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .scrollDisabled(true)
     }
 
     private func styleBinding(_ bundleID: String) -> Binding<Style> {
@@ -134,30 +138,5 @@ struct AppStylesTab: View {
                 "\(style.displayName): " + apps.map { appName($0.key) }.sorted().joined(separator: ", ")
             }
             .joined(separator: "\n")
-    }
-}
-
-struct HistorySettingsTab: View {
-    @Bindable var controller: AppController
-    @State private var confirmClear = false
-
-    var body: some View {
-        Form {
-            Picker("Keep history", selection: $controller.settings.historyRetention) {
-                Text("Off").tag(HistoryRetention.off)
-                Text("7 days").tag(HistoryRetention.days7)
-                Text("30 days").tag(HistoryRetention.days30)
-                Text("Forever").tag(HistoryRetention.forever)
-            }
-            Toggle("Keep audio of the last 50 dictations", isOn: $controller.settings.keepAudio)
-            Button("Show audio folder") { NSWorkspace.shared.open(controller.paths.audioDirectory) }
-            Button("Clear all history…", role: .destructive) { confirmClear = true }
-        }
-        .formStyle(.grouped)
-        .confirmationDialog("Delete all history?", isPresented: $confirmClear) {
-            Button("Delete all", role: .destructive) { Task { await controller.clearHistory() } }
-        } message: {
-            Text("This cannot be undone.")
-        }
     }
 }

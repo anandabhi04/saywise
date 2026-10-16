@@ -60,26 +60,3 @@ struct SetupView: View {
         controller.startHotkeyIfAllowed()
     }
 }
-
-struct ModelStatusView: View {
-    let controller: AppController
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Models").bold()
-            switch controller.status {
-            case let .loadingModels(message):
-                Text(message).font(.callout)
-                ProgressView(value: controller.modelProgress)
-            case let .failed(message):
-                Text(message).font(.callout).foregroundStyle(.red)
-                Button("Retry") { Task { await controller.loadModels() } }
-            case .starting:
-                Text("Starting…").font(.callout)
-            default:
-                Label("Models are ready", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            }
-        }
-    }
-}

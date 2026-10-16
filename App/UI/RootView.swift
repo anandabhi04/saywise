@@ -40,9 +40,9 @@ struct RootView: View {
                 switch state.page {
                 case .home: HomeView(controller: controller, state: state)
                 case .history: HistoryView(controller: controller, focus: $state.historyFocus)
-                case .dictionary: PageColumn(title: "Dictionary") { DictionaryTab(controller: controller) }
-                case .snippets: PageColumn(title: "Snippets") { SnippetsTab(controller: controller) }
-                case .appStyles: PageColumn(title: "App styles") { AppStylesTab(controller: controller) }
+                case .dictionary: PageColumn(title: "Dictionary", help: "Words Saywise must spell exactly. \"Heard as\" lists what the speech model writes instead, separated by commas.") { DictionaryTab(controller: controller) }
+                case .snippets: PageColumn(title: "Snippets", help: "Say the trigger and Saywise types the text. Example: \"my email\".") { SnippetsTab(controller: controller) }
+                case .appStyles: PageColumn(title: "App styles", help: "Pick a writing style per app. Browser title rules win inside browsers.") { AppStylesTab(controller: controller) }
                 case .settings: PageColumn(title: "Settings") { SettingsView(controller: controller) }
                 }
             }
