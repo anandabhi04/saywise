@@ -120,6 +120,23 @@ struct DictationPipelineTests {
         #expect(result?.finalText == "me@example.com")
     }
 
+    @Test func wholeSnippetInCodeStyleIsPastedVerbatim() async throws {
+        var settings = ChirpSettings()
+        settings.snippets = [Snippet(trigger: "sign off", expansion: "Best regards")]
+        let inserter = RecordingInserter()
+        let history = RecordingHistory()
+        let cleaner = FakeCleaner(reply: { _ in Issue.record("cleaner must not run"); return "" })
+        let result = try #require(delivered(await pipeline(
+            transcript: "Sign off.", cleaner: cleaner, inserter: inserter, history: history)
+            .run(DictationInput(samples: speechSamples,
+                context: AppContext(bundleID: "com.apple.dt.Xcode"), settings: settings))))
+        #expect(result.style == .code)
+        #expect(result.cleanup == .snippet)
+        #expect(result.finalText == "Best regards")
+        #expect(inserter.inserted.withLock { $0 } == ["Best regards"])
+        #expect(history.entries.withLock { $0.first?.finalText } == "Best regards")
+    }
+
     @Test func inlineSnippetSurvivesCleanup() async {
         var settings = ChirpSettings()
         settings.snippets = [Snippet(trigger: "my email", expansion: "me@example.com")]

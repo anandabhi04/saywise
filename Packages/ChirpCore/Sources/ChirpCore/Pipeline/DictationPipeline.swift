@@ -66,7 +66,7 @@ public struct DictationPipeline: Sendable {
             (text, cleanup) = await cleaned(fixedRaw: fixedRaw, fallback: fallback, style: style, settings: settings)
         }
         timings.cleanupMs = (clock.now - cleanupStart).milliseconds
-        text = StyleFinisher.finish(text, style: style)
+        if cleanup != .snippet { text = StyleFinisher.finish(text, style: style) }
 
         let insertStart = clock.now
         let insert = await inserter.insert(text)
