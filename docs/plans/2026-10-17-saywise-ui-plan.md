@@ -1,109 +1,94 @@
 # Saywise UI Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. In this project each task is handed to the Codex CLI (`codex exec`, model `gpt-6.1-sol`), one task per run, and the main session checks the result before the next task.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give Saywise one premium, native Mac window with a Home dashboard, a sidebar, and one dark glass floating bar, plus a stepped first run.
+**Goal:** Turn Saywise into one sidebar window with a Home dashboard, one dark-glass floating bar, and a stepped first run, as specified.
 
-**Architecture:** `ChirpCore` gets one new pure type, `HistoryStats`, computed from history rows and covered by `swift test`. The app target gets a new shell (`RootView` + `Sidebar` in one `NSWindow`), a `Home` folder for the dashboard, a `Components` folder for shared views, and a `FloatingBar` that replaces both the `Pill` and the `FloatingButton`. `AppController` keeps the dictation logic and only changes how it reports state to the bar and the window.
+**Architecture:** `ChirpCore` gains one pure stats type computed from history rows. The app target replaces four windows with one `RootView` (sidebar + pages), replaces `FloatingButton` + `Pill` with `FloatingBar` (one non-activating panel), and rewrites setup as `OnboardingView`. `AppController` keeps the pipeline and only changes how it talks to the bar and what strings it exposes.
 
-**Tech Stack:** Swift 6, SwiftUI + AppKit, Swift Charts, macOS 15, GRDB 7, Swift Testing, XcodeGen. No new dependencies.
+**Tech Stack:** Swift 5, SwiftUI, AppKit, Swift Charts, GRDB (already used), Swift Testing. macOS 15. No new dependencies.
 
-**Spec:** [docs/specs/2026-10-17-saywise-ui-design.md](../specs/2026-10-17-saywise-ui-design.md)
+**Spec:** `docs/specs/2026-10-17-saywise-ui-design.md`. Read it before each task. Section numbers below refer to it.
 
 ## Global Constraints
 
-- macOS 15.0 minimum. No third-party library added. Swift Charts is a system framework and is allowed.
-- One accent (system accent). Live is system red. Good is system green. Warning is system orange. No other color.
-- Copy is short. Status is a dot and one or two words. No sentence the user does not need right now.
-- The floating bar is a non-activating `NSPanel` (`[.nonactivatingPanel, .borderless]`, `canBecomeKey` and `canBecomeMain` false). It never takes focus.
-- The bar is dark in both light and dark mode. Set `NSAppearance(named: .darkAqua)` on the panel only, never on the app.
-- Typing speed for "time saved" is 40 words per minute.
-- Words are counted by splitting `finalText` on whitespace and newlines and dropping empty parts.
-- Every Swift file the plan creates is listed in a task. XcodeGen picks up new files under `App/` on `xcodegen generate`, so each build step runs it first.
-- Follow `~/.claude/CODING_HABITS.md`: no comments that restate code, no changes outside the task, no renames of settings keys (`showFloatingButton` stays as the stored key; only the label changes).
-
-## Commands used in every task
+- macOS 15 minimum. SwiftUI + AppKit + Swift Charts only. No third-party UI libraries.
+- Colors: system accent, system red (live), system green (good), system orange (warning). Nothing else.
+- The floating bar panel must stay non-activating: `styleMask: [.nonactivatingPanel, .borderless]`, `canBecomeKey` and `canBecomeMain` return `false`.
+- The bar is dark in both light and dark mode: `NSAppearance(named: .darkAqua)` on the panel only.
+- Copy strings exactly as the spec writes them.
+- Every task ends with: `swift test` green in `Packages/ChirpCore`, and the app target building. Build commands:
 
 ```bash
-# BUILD: regenerate the project and build the app
-cd /Users/abhishekananad/Documents/Chirp && xcodegen generate && xcodebuild -project Chirp.xcodeproj -scheme Chirp -configuration Debug -derivedDataPath build -skipMacroValidation -skipPackagePluginValidation build 2>&1 | tail -20
+cd Packages/ChirpCore && swift test 2>&1 | tail -5
 ```
 
 ```bash
-# TEST: run the core package tests
-cd /Users/abhishekananad/Documents/Chirp/Packages/ChirpCore && swift test 2>&1 | tail -20
+xcodegen generate && xcodebuild -project Chirp.xcodeproj -scheme Chirp -configuration Debug -derivedDataPath build/DerivedData build 2>&1 | grep -E "error:|warning:.*App/|BUILD" | head -40
 ```
 
-```bash
-# RUN: open the built app
-open /Users/abhishekananad/Documents/Chirp/build/Build/Products/Debug/Saywise.app
-```
-
-A task is done when BUILD ends with `** BUILD SUCCEEDED **` and shows no warning in a file the task touched, and TEST ends with every test passing.
-
-## Decisions made while planning
-
-| # | Decision | Why |
-|---|---|---|
-| 1 | The bar panel has a fixed size (340 × 80 pt) and is fully transparent. The capsule, its material, stroke and shadow are drawn by SwiftUI inside it. | The width spring then runs entirely in SwiftUI. The panel never resizes, so nothing can flicker and the center stays fixed by construction. Hit testing is limited to the capsule's current width, which the view reports with `onGeometryChange`. |
-| 2 | When "Show floating bar" is off, the bar still appears while a recording runs and for flashes, then goes away when it is resting. | This is what the pill did. Without it a hotkey recording would show nothing at all. |
-| 3 | A Home recording uses a `CopyInserter` that copies the text and returns `.copiedNoTextField`. | The spec says Home recordings are saved, shown and copied, never pasted. Reusing the existing outcome keeps `finish` simple and the bar shows "Copied". |
-| 4 | The record button on Home shows recording and working for every source, and a click during a hotkey recording stops it. | One state per window, as the spec's state table says. |
-| 5 | Model progress is shown as a percent. | The loaders report a 0 to 1 fraction, not bytes. The spec allows a percent when bytes are unknown. |
-| 6 | The hands-free lock shows for recordings started from the bar or Home, and for a hotkey recording that is hands-free when it starts. | Those recordings do not stop on key release, which is what the lock means. |
-| 7 | The welcome and Fn steps of first run show only once, tracked by a `UserDefaults` flag `onboardingSeen`. The other steps show whenever they are needed. | "Steps already done are skipped" needs a record of having seen the one-time steps. |
-
-## File structure
-
-| Path | Responsibility |
-|---|---|
-| `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStats.swift` | Pure stats from `[HistoryEntry]`. |
-| `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStore.swift` | Adds `stats(now:calendar:)` that loads the last 60 days and computes. |
-| `Packages/ChirpCore/Tests/ChirpCoreTests/HistoryStatsTests.swift` | Stats tests with fixed dates. |
-| `App/UI/Components/WaveView.swift` | Bars from levels. Shared by the bar and the Talk card. |
-| `App/UI/Components/StatusDot.swift` | 8 pt dot, optional pulse. |
-| `App/UI/Components/Card.swift` | The 16 pt rounded card. |
-| `App/UI/Components/Banner.swift` | Orange attention banner with one button. |
-| `App/UI/Components/RecordButton.swift` | 64 pt record button with the breathing ring. |
-| `App/UI/Components/PageColumn.swift` | Centered 760 pt content column with title and help line. |
-| `App/UI/Components/VisualEffectView.swift` | `NSVisualEffectView` wrapper. |
-| `App/UI/Components/CountUpText.swift` | Animatable number text. |
-| `App/UI/Components/AppIcon.swift` | App icon by bundle id, cached. |
-| `App/UI/FloatingBar/BarModel.swift` | Phase and levels of the bar. |
-| `App/UI/FloatingBar/FloatingBarView.swift` | The capsule and its states. |
-| `App/UI/FloatingBar/FloatingBarPanel.swift` | Non-activating panel and the click-vs-drag host view. |
-| `App/UI/FloatingBar/FloatingBarController.swift` | Shows phases, flashes, placement, visibility. |
-| `App/UI/Shell/Page.swift` | The sidebar pages and the shared `Navigation` state. |
-| `App/UI/Shell/RootView.swift` | `NavigationSplitView` with the page switch. |
-| `App/UI/Shell/Sidebar.swift` | Sidebar items and the status row. |
-| `App/UI/WindowCoordinator.swift` | One main window, the setup window. |
-| `App/UI/Home/HomeModel.swift` | Loads stats and recent, greeting. |
-| `App/UI/Home/HomeView.swift` | Header, banner slot, Talk card, stats, activity, two half cards. |
-| `App/UI/Home/TalkCard.swift`, `StatCard.swift`, `ActivityChart.swift`, `TopAppsCard.swift`, `RecentCard.swift` | One view each. |
-| `App/UI/HistoryView.swift` | Grouped list, expand in place, focus from Home. |
-| `App/UI/Settings/SettingsView.swift` | One grouped form. |
-| `App/UI/Settings/ListPages.swift` | Dictionary, Snippets, App styles pages (renamed from `ListTabs.swift`). |
-| `App/UI/OnboardingView.swift` | Stepped first run (replaces `SetupView.swift`). |
-| `App/UI/MenuContent.swift` | Menu bar items. |
-| `App/AppController.swift` | Bar wiring, short status strings, hints, copy inserter, hotkey restart flag. |
-| `App/System/Permissions.swift` | Short reasons, banner text, request-or-open-settings. |
-| Deleted | `App/UI/MainView.swift`, `App/UI/Pill.swift`, `App/UI/FloatingButton.swift`, `App/UI/SetupView.swift`, `App/UI/Settings/ListTabs.swift`. |
+- Launch for a visual check: `open build/DerivedData/Build/Products/Debug/Chirp.app`. Screenshots go in `docs/design/screens/` (create the folder in Task 9).
+- Commit after each task with the message given. Do not touch files a task does not list.
 
 ---
 
-### Task 1: HistoryStats
+## File structure
+
+| File | Responsibility |
+|---|---|
+| `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStats.swift` | Pure stats from `[HistoryEntry]` + `HistoryStore.stats(now:calendar:)` |
+| `Packages/ChirpCore/Tests/ChirpCoreTests/HistoryStatsTests.swift` | Tests for the above |
+| `App/UI/Components/Card.swift` | Card container modifier |
+| `App/UI/Components/StatusDot.swift` | 8 pt dot, optional pulse |
+| `App/UI/Components/WaveView.swift` | Level bars, shared by bar and Talk card |
+| `App/UI/Components/RecordButton.swift` | 64 pt record button with states |
+| `App/UI/Components/Banner.swift` | Orange warning banner |
+| `App/UI/FloatingBar.swift` | `BarModel`, `FloatingBarView` |
+| `App/UI/FloatingBarPanel.swift` | Panel, host view (click vs drag), `FloatingBarController` |
+| `App/UI/RootView.swift` | `Page` enum, `NavigationSplitView`, page switch |
+| `App/UI/Sidebar.swift` | Sidebar list + status row |
+| `App/UI/Home/HomeModel.swift` | Loads stats + recent, greeting, talk state |
+| `App/UI/Home/HomeView.swift` | Home page layout |
+| `App/UI/Home/TalkCard.swift`, `StatCard.swift`, `ActivityChart.swift`, `TopAppsCard.swift`, `RecentCard.swift` | One card each |
+| `App/UI/HistoryView.swift` | Rewritten list with expand-in-place |
+| `App/UI/Settings/SettingsView.swift` | One grouped form |
+| `App/UI/Settings/ListPages.swift` | Dictionary, Snippets, App styles pages (renamed from `ListTabs.swift`) |
+| `App/UI/OnboardingView.swift` | Stepped setup (replaces `SetupView.swift`) |
+| `App/UI/WindowCoordinator.swift` | One main window + setup window |
+| `App/UI/MenuContent.swift` | Menu items |
+| `App/AppController.swift` | `bar` instead of `pill`, new strings |
+| `App/System/Permissions.swift` | New `reason` strings |
+| Deleted | `App/UI/MainView.swift`, `App/UI/FloatingButton.swift`, `App/UI/Pill.swift`, `App/UI/SetupView.swift`, `App/UI/Settings/ListTabs.swift` |
+
+---
+
+### Task 1: HistoryStats in ChirpCore (spec § 8)
 
 **Files:**
 - Create: `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStats.swift`
+- Modify: `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStore.swift` (add one method at the end of the class)
 - Test: `Packages/ChirpCore/Tests/ChirpCoreTests/HistoryStatsTests.swift`
 
 **Interfaces:**
-- Consumes: `HistoryEntry` (`createdAt`, `finalText`, `audioSeconds`, `appBundleID`, `appName`).
-- Produces: `HistoryStats` with `wordsToday`, `wordsYesterday`, `wordsThisWeek`, `dictationsThisWeek`, `secondsSavedThisWeek`, `streakDays`, `bestStreakDays`, `last14Days: [HistoryStats.Day]`, `topApps: [HistoryStats.AppWords]`, `static func compute(entries:now:calendar:)`, `static func wordCount(_:)`, `static func empty(now:calendar:)`.
+- Produces:
+  ```swift
+  public struct HistoryStats: Equatable, Sendable {
+      public struct Day: Equatable, Sendable { public var date: Date; public var words: Int }
+      public struct AppWords: Equatable, Sendable, Identifiable {
+          public var bundleID: String?; public var name: String; public var words: Int
+          public var id: String { bundleID ?? name }
+      }
+      public var wordsToday: Int, wordsYesterday: Int, wordsThisWeek: Int, dictationsThisWeek: Int
+      public var secondsSavedThisWeek: Double, streakDays: Int, bestStreakDays: Int
+      public var last14Days: [Day], topApps: [AppWords]
+      public static let empty: HistoryStats
+      public static func compute(entries: [HistoryEntry], now: Date, calendar: Calendar) -> HistoryStats
+      public static func wordCount(_ text: String) -> Int
+  }
+  extension HistoryStore { public func stats(now: Date = Date(), calendar: Calendar = .current) async throws -> HistoryStats }
+  ```
 
 - [ ] **Step 1: Write the failing tests**
-
-Create `Packages/ChirpCore/Tests/ChirpCoreTests/HistoryStatsTests.swift`:
 
 ```swift
 import Foundation
@@ -111,318 +96,239 @@ import Testing
 @testable import ChirpCore
 
 struct HistoryStatsTests {
-    // Thursday 2026-10-15 12:00 UTC. The week (Monday first) starts 2026-10-12.
-    let now = Date(timeIntervalSince1970: 1_792_065_600)
-
-    var calendar: Calendar {
+    // Fixed clock: Thursday 2026-10-15 14:00 UTC. Week (ISO-like, Monday start) is Oct 12–18.
+    let calendar: Calendar = {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC")!
         c.firstWeekday = 2
         return c
-    }
+    }()
+    let now = Date(timeIntervalSince1970: 1_792_072_800) // 2026-10-15T14:00:00Z
 
-    func entry(_ text: String, daysAgo: Int, hour: Int = 10, app: String? = "Slack",
-               bundleID: String? = "com.tinyspeck.slackmacgap", audioSeconds: Double = 5) -> HistoryEntry {
+    func entry(_ text: String, daysAgo: Int, hour: Int = 10, app: String = "Notes", bundle: String? = "com.apple.Notes", audio: Double = 5) -> HistoryEntry {
         let day = calendar.date(byAdding: .day, value: -daysAgo, to: calendar.startOfDay(for: now))!
-        let at = calendar.date(byAdding: .hour, value: hour, to: day)!
+        let at = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day)!
         return HistoryEntry(
-            createdAt: at, appBundleID: bundleID, appName: app, style: "chat", language: "auto",
-            audioSeconds: audioSeconds, rawText: text, finalText: text, cleanup: "used",
-            insertOutcome: "pasted", transcribeMs: 1, cleanupMs: 1, insertMs: 1, totalMs: 3, audioFileName: nil)
-    }
-
-    func stats(_ entries: [HistoryEntry]) -> HistoryStats {
-        HistoryStats.compute(entries: entries, now: now, calendar: calendar)
-    }
-
-    @Test func wordCountSplitsOnWhitespaceAndDropsEmptyParts() {
-        #expect(HistoryStats.wordCount("kal  meeting hai\n5 baje ") == 5)
-        #expect(HistoryStats.wordCount("") == 0)
-        #expect(HistoryStats.wordCount("   ") == 0)
+            createdAt: at, appBundleID: bundle, appName: app, style: "document", language: "auto",
+            audioSeconds: audio, rawText: text, finalText: text, cleanup: "used", insertOutcome: "pasted",
+            transcribeMs: 1, cleanupMs: 1, insertMs: 1, totalMs: 3, audioFileName: nil)
     }
 
     @Test func emptyInputGivesZerosAndFourteenDays() {
-        let s = stats([])
-        #expect(s.wordsToday == 0)
-        #expect(s.wordsThisWeek == 0)
-        #expect(s.dictationsThisWeek == 0)
-        #expect(s.secondsSavedThisWeek == 0)
-        #expect(s.streakDays == 0)
-        #expect(s.bestStreakDays == 0)
+        let s = HistoryStats.compute(entries: [], now: now, calendar: calendar)
+        #expect(s == HistoryStats.empty.with14Days(endingOn: now, calendar: calendar))
         #expect(s.last14Days.count == 14)
         #expect(s.last14Days.allSatisfy { $0.words == 0 })
-        #expect(s.topApps.isEmpty)
-        #expect(s == HistoryStats.empty(now: now, calendar: calendar))
+        #expect(s.last14Days.last?.date == calendar.startOfDay(for: now))
     }
 
-    @Test func todayAndYesterdayAreCountedSeparately() {
-        let s = stats([entry("one two three", daysAgo: 0), entry("four five", daysAgo: 0), entry("six", daysAgo: 1)])
-        #expect(s.wordsToday == 5)
-        #expect(s.wordsYesterday == 1)
-        #expect(s.last14Days.last?.words == 5)
-        #expect(s.last14Days[12].words == 1)
+    @Test func countsWordsBySplittingOnWhitespace() {
+        #expect(HistoryStats.wordCount("kal  meeting hai\n5 baje") == 5)
+        #expect(HistoryStats.wordCount("   ") == 0)
     }
 
-    @Test func last14DaysIsOldestFirstAndEndsToday() {
-        let s = stats([])
-        let today = calendar.startOfDay(for: now)
-        #expect(s.last14Days.last?.date == today)
-        #expect(s.last14Days.first?.date == calendar.date(byAdding: .day, value: -13, to: today))
+    @Test func todayAndYesterdayAndWeek() {
+        let s = HistoryStats.compute(entries: [
+            entry("one two three", daysAgo: 0),
+            entry("four five", daysAgo: 1),
+            entry("six", daysAgo: 3),          // Monday Oct 12, in this week
+            entry("seven eight", daysAgo: 4),  // Sunday Oct 11, last week
+        ], now: now, calendar: calendar)
+        #expect(s.wordsToday == 3)
+        #expect(s.wordsYesterday == 2)
+        #expect(s.wordsThisWeek == 6)
+        #expect(s.dictationsThisWeek == 3)
+        #expect(s.last14Days.last?.words == 3)
+        #expect(s.last14Days[13 - 4].words == 2)
     }
 
-    @Test func weekStartsOnMondayAndExcludesLastSunday() {
-        // Thursday: 3 days ago is Monday (in week), 4 days ago is Sunday (out).
-        let s = stats([entry("a b", daysAgo: 3), entry("c d e", daysAgo: 4), entry("f", daysAgo: 0)])
-        #expect(s.wordsThisWeek == 3)
-        #expect(s.dictationsThisWeek == 2)
-    }
-
-    @Test func timeSavedIsTypingTimeMinusSpeakingTimeAndNeverNegative() {
-        // 40 words at 40 wpm = 60 s typing, spoken in 20 s -> 40 s saved.
+    @Test func timeSavedNeverNegativeAndOnlyThisWeek() {
+        // 40 words at 40 wpm = 60 s. Minus 10 s audio = 50 s saved.
         let forty = Array(repeating: "w", count: 40).joined(separator: " ")
-        // 2 words = 3 s typing, spoken in 10 s -> 0, not -7.
-        let s = stats([entry(forty, daysAgo: 0, audioSeconds: 20), entry("a b", daysAgo: 1, audioSeconds: 10)])
-        #expect(s.secondsSavedThisWeek == 40)
+        let s = HistoryStats.compute(entries: [
+            entry(forty, daysAgo: 0, audio: 10),
+            entry("slow", daysAgo: 1, audio: 30),      // 1.5 s typing - 30 s audio → 0
+            entry(forty, daysAgo: 5, audio: 0),        // last week, ignored
+        ], now: now, calendar: calendar)
+        #expect(abs(s.secondsSavedThisWeek - 50) < 0.001)
     }
 
     @Test func streakCountsConsecutiveDaysEndingToday() {
-        let s = stats([entry("a", daysAgo: 0), entry("a", daysAgo: 1), entry("a", daysAgo: 2), entry("a", daysAgo: 4)])
+        let s = HistoryStats.compute(entries: [
+            entry("a", daysAgo: 0), entry("b", daysAgo: 1), entry("c", daysAgo: 2),
+            entry("d", daysAgo: 4),
+        ], now: now, calendar: calendar)
         #expect(s.streakDays == 3)
     }
 
-    @Test func streakStillCountsWhenTodayIsEmpty() {
-        let s = stats([entry("a", daysAgo: 1), entry("a", daysAgo: 2)])
+    @Test func streakMayEndYesterdayWhenTodayIsEmpty() {
+        let s = HistoryStats.compute(entries: [
+            entry("b", daysAgo: 1), entry("c", daysAgo: 2),
+        ], now: now, calendar: calendar)
         #expect(s.streakDays == 2)
     }
 
-    @Test func streakIsZeroWhenYesterdayAndTodayAreEmpty() {
-        let s = stats([entry("a", daysAgo: 2), entry("a", daysAgo: 3)])
+    @Test func streakIsZeroAfterAGap() {
+        let s = HistoryStats.compute(entries: [entry("c", daysAgo: 2)], now: now, calendar: calendar)
         #expect(s.streakDays == 0)
-        #expect(s.bestStreakDays == 2)
+        #expect(s.bestStreakDays == 1)
     }
 
-    @Test func bestStreakIsTheLongestRun() {
-        let s = stats([
+    @Test func bestStreakIsLongestRun() {
+        let s = HistoryStats.compute(entries: [
             entry("a", daysAgo: 0),
-            entry("a", daysAgo: 10), entry("a", daysAgo: 11), entry("a", daysAgo: 12), entry("a", daysAgo: 13),
-        ])
+            entry("b", daysAgo: 10), entry("c", daysAgo: 11), entry("d", daysAgo: 12), entry("e", daysAgo: 13),
+        ], now: now, calendar: calendar)
         #expect(s.streakDays == 1)
         #expect(s.bestStreakDays == 4)
     }
 
-    @Test func topAppsAreThisWeekMostWordsFirstMaxFive() {
+    @Test func topAppsThisWeekOrderedAndLimitedToFive() {
         var entries: [HistoryEntry] = []
         for (i, name) in ["A", "B", "C", "D", "E", "F"].enumerated() {
-            entries.append(entry(Array(repeating: "w", count: i + 1).joined(separator: " "), daysAgo: 0, app: name, bundleID: "app.\(name)"))
+            entries.append(entry(Array(repeating: "w", count: i + 1).joined(separator: " "), daysAgo: 0, app: name, bundle: "app.\(name)"))
         }
-        entries.append(entry("x x x x x x x x x x", daysAgo: 5, app: "Old", bundleID: "app.old"))
-        let s = stats(entries)
-        #expect(s.topApps.count == 5)
+        entries.append(entry("x x x x x x x x x x x x x x x x x x x x", daysAgo: 6, app: "Old", bundle: "app.Old")) // last week
+        let s = HistoryStats.compute(entries: entries, now: now, calendar: calendar)
         #expect(s.topApps.map(\.name) == ["F", "E", "D", "C", "B"])
         #expect(s.topApps.first?.words == 6)
-        #expect(s.topApps.first?.bundleID == "app.F")
     }
 
-    @Test func topAppsFallBackToBundleIDThenUnknown() {
-        let s = stats([entry("a", daysAgo: 0, app: nil, bundleID: "com.x"), entry("b", daysAgo: 0, app: nil, bundleID: nil)])
-        #expect(Set(s.topApps.map(\.name)) == ["com.x", "Unknown"])
+    @Test func unknownAppIsNamedUnknownApp() {
+        let s = HistoryStats.compute(entries: [entry("a b", daysAgo: 0, app: "", bundle: nil)], now: now, calendar: calendar)
+        #expect(s.topApps.first?.name == "Unknown app")
+    }
+
+    @Test func storeStatsReadsRows() async throws {
+        let store = try HistoryStore()
+        try await store.save(entry("one two", daysAgo: 0))
+        try await store.save(entry("three", daysAgo: 1))
+        let s = try await store.stats(now: now, calendar: calendar)
+        #expect(s.wordsToday == 2)
+        #expect(s.wordsYesterday == 1)
     }
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/abhishekananad/Documents/Chirp/Packages/ChirpCore && swift test --filter HistoryStatsTests 2>&1 | tail -5`
-Expected: compile error, `cannot find 'HistoryStats' in scope`.
+Run: `cd Packages/ChirpCore && swift test --filter HistoryStatsTests 2>&1 | tail -5`
+Expected: compile error, `HistoryStats` not found.
 
-- [ ] **Step 3: Write the implementation**
-
-Create `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStats.swift`:
+- [ ] **Step 3: Implement**
 
 ```swift
+// Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStats.swift
 import Foundation
 
-/// Numbers for the Home page, computed from history rows. Pure, so tests pass a fixed `now`.
 public struct HistoryStats: Equatable, Sendable {
     public struct Day: Equatable, Sendable {
         public var date: Date
         public var words: Int
-
-        public init(date: Date, words: Int) {
-            self.date = date
-            self.words = words
-        }
+        public init(date: Date, words: Int) { self.date = date; self.words = words }
     }
 
-    public struct AppWords: Equatable, Sendable {
+    public struct AppWords: Equatable, Sendable, Identifiable {
         public var bundleID: String?
         public var name: String
         public var words: Int
-
+        public var id: String { bundleID ?? name }
         public init(bundleID: String?, name: String, words: Int) {
-            self.bundleID = bundleID
-            self.name = name
-            self.words = words
+            self.bundleID = bundleID; self.name = name; self.words = words
         }
     }
 
+    /// Words per minute we assume for typing, to estimate time saved.
     public static let typingWordsPerMinute = 40.0
-    public static let dayCount = 14
-    public static let topAppLimit = 5
 
-    public var wordsToday: Int
-    public var wordsYesterday: Int
-    public var wordsThisWeek: Int
-    public var dictationsThisWeek: Int
-    public var secondsSavedThisWeek: Double
-    public var streakDays: Int
-    public var bestStreakDays: Int
-    /// Oldest first, always `dayCount` items, the last one is today.
-    public var last14Days: [Day]
-    /// This week, most words first, at most `topAppLimit`.
-    public var topApps: [AppWords]
+    public var wordsToday = 0
+    public var wordsYesterday = 0
+    public var wordsThisWeek = 0
+    public var dictationsThisWeek = 0
+    public var secondsSavedThisWeek = 0.0
+    public var streakDays = 0
+    public var bestStreakDays = 0
+    public var last14Days: [Day] = []
+    public var topApps: [AppWords] = []
+
+    public static let empty = HistoryStats()
+
+    public func with14Days(endingOn now: Date, calendar: Calendar) -> HistoryStats {
+        var copy = self
+        let today = calendar.startOfDay(for: now)
+        copy.last14Days = (0..<14).reversed().map { offset in
+            Day(date: calendar.date(byAdding: .day, value: -offset, to: today)!, words: 0)
+        }
+        return copy
+    }
 
     public static func wordCount(_ text: String) -> Int {
         text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
     }
 
-    public static func empty(now: Date, calendar: Calendar) -> HistoryStats {
-        compute(entries: [], now: now, calendar: calendar)
-    }
-
     public static func compute(entries: [HistoryEntry], now: Date, calendar: Calendar) -> HistoryStats {
+        var stats = HistoryStats.empty.with14Days(endingOn: now, calendar: calendar)
         let today = calendar.startOfDay(for: now)
         let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
         let weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? today
+        var dayIndex: [Date: Int] = [:]
+        for (i, day) in stats.last14Days.enumerated() { dayIndex[day.date] = i }
 
         var wordsByDay: [Date: Int] = [:]
+        var appWords: [String: AppWords] = [:]
+
         for entry in entries {
+            let words = wordCount(entry.finalText)
             let day = calendar.startOfDay(for: entry.createdAt)
-            wordsByDay[day, default: 0] += wordCount(entry.finalText)
+            wordsByDay[day, default: 0] += words
+            if let i = dayIndex[day] { stats.last14Days[i].words += words }
+            if day == today { stats.wordsToday += words }
+            if day == yesterday { stats.wordsYesterday += words }
+            if entry.createdAt >= weekStart {
+                stats.wordsThisWeek += words
+                stats.dictationsThisWeek += 1
+                let typing = Double(words) / typingWordsPerMinute * 60
+                stats.secondsSavedThisWeek += max(0, typing - entry.audioSeconds)
+                let name = entry.appName.flatMap { $0.isEmpty ? nil : $0 } ?? "Unknown app"
+                let key = entry.appBundleID ?? name
+                var app = appWords[key] ?? AppWords(bundleID: entry.appBundleID, name: name, words: 0)
+                app.words += words
+                appWords[key] = app
+            }
         }
 
-        let days = (0..<dayCount).reversed().map { offset -> Day in
-            let date = calendar.date(byAdding: .day, value: -offset, to: today)!
-            return Day(date: date, words: wordsByDay[date] ?? 0)
+        stats.topApps = Array(appWords.values.sorted { $0.words != $1.words ? $0.words > $1.words : $0.name < $1.name }.prefix(5))
+
+        // Streak: walk back from today (or yesterday when today is empty).
+        let activeDays = Set(wordsByDay.filter { $0.value > 0 || entries.contains { e in calendar.startOfDay(for: e.createdAt) == $0.key } }.keys)
+        var cursor = activeDays.contains(today) ? today : yesterday
+        while activeDays.contains(cursor) {
+            stats.streakDays += 1
+            cursor = calendar.date(byAdding: .day, value: -1, to: cursor)!
         }
 
-        let week = entries.filter { $0.createdAt >= weekStart }
-        let wordsThisWeek = week.reduce(0) { $0 + wordCount($1.finalText) }
-        let secondsSaved = week.reduce(0.0) { total, entry in
-            let typing = Double(wordCount(entry.finalText)) / typingWordsPerMinute * 60
-            return total + max(0, typing - entry.audioSeconds)
-        }
-
-        var byApp: [String: AppWords] = [:]
-        for entry in week {
-            let key = entry.appBundleID ?? entry.appName ?? "Unknown"
-            let name = entry.appName ?? entry.appBundleID ?? "Unknown"
-            var app = byApp[key] ?? AppWords(bundleID: entry.appBundleID, name: name, words: 0)
-            app.words += wordCount(entry.finalText)
-            byApp[key] = app
-        }
-        let topApps = Array(byApp.values.sorted { ($0.words, $1.name) > ($1.words, $0.name) }.prefix(topAppLimit))
-
-        let activeDays = Set(wordsByDay.keys)
-        let streakDays = streak(from: activeDays.contains(today) ? today : yesterday, in: activeDays, calendar: calendar)
-
-        return HistoryStats(
-            wordsToday: wordsByDay[today] ?? 0,
-            wordsYesterday: wordsByDay[yesterday] ?? 0,
-            wordsThisWeek: wordsThisWeek,
-            dictationsThisWeek: week.count,
-            secondsSavedThisWeek: secondsSaved,
-            streakDays: streakDays,
-            bestStreakDays: bestStreak(in: activeDays, calendar: calendar),
-            last14Days: days,
-            topApps: topApps)
-    }
-
-    private static func streak(from start: Date, in days: Set<Date>, calendar: Calendar) -> Int {
-        var count = 0
-        var day = start
-        while days.contains(day) {
-            count += 1
-            day = calendar.date(byAdding: .day, value: -1, to: day)!
-        }
-        return count
-    }
-
-    private static func bestStreak(in days: Set<Date>, calendar: Calendar) -> Int {
         var best = 0
-        for day in days {
-            let previous = calendar.date(byAdding: .day, value: -1, to: day)!
-            guard !days.contains(previous) else { continue }
-            best = max(best, streakForward(from: day, in: days, calendar: calendar))
+        var run = 0
+        var previous: Date?
+        for day in activeDays.sorted() {
+            if let previous, calendar.date(byAdding: .day, value: 1, to: previous) == day {
+                run += 1
+            } else {
+                run = 1
+            }
+            best = max(best, run)
+            previous = day
         }
-        return best
-    }
-
-    private static func streakForward(from start: Date, in days: Set<Date>, calendar: Calendar) -> Int {
-        var count = 0
-        var day = start
-        while days.contains(day) {
-            count += 1
-            day = calendar.date(byAdding: .day, value: 1, to: day)!
-        }
-        return count
+        stats.bestStreakDays = best
+        return stats
     }
 }
 ```
 
-Note on the sort: `($0.words, $1.name) > ($1.words, $0.name)` sorts words descending and, for equal words, names ascending.
-
-- [ ] **Step 4: Run the tests to verify they pass**
-
-Run: `cd /Users/abhishekananad/Documents/Chirp/Packages/ChirpCore && swift test --filter HistoryStatsTests 2>&1 | tail -5`
-Expected: `Test run with 12 tests passed`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-cd /Users/abhishekananad/Documents/Chirp && git add Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStats.swift Packages/ChirpCore/Tests/ChirpCoreTests/HistoryStatsTests.swift && git commit -m "Add HistoryStats for the Home page"
-```
-
----
-
-### Task 2: HistoryStore.stats
-
-**Files:**
-- Modify: `Packages/ChirpCore/Sources/ChirpCore/Storage/HistoryStore.swift` (add one method after `recent`)
-- Test: `Packages/ChirpCore/Tests/ChirpCoreTests/HistoryStatsTests.swift` (add one test)
-
-**Interfaces:**
-- Consumes: `HistoryStats.compute(entries:now:calendar:)` from Task 1.
-- Produces: `func stats(now: Date = Date(), calendar: Calendar = .current) async throws -> HistoryStats` on `HistoryStore`.
-
-- [ ] **Step 1: Write the failing test**
-
-Add to the end of `HistoryStatsTests` (inside the struct):
+Add to `HistoryStore` (after `purge`):
 
 ```swift
-    @Test func storeStatsLoadsOnlyTheLastSixtyDays() async throws {
-        let store = try HistoryStore()
-        try await store.save(entry("a b c", daysAgo: 0))
-        try await store.save(entry("d", daysAgo: 59))
-        try await store.save(entry("e f g h", daysAgo: 61))
-        let s = try await store.stats(now: now, calendar: calendar)
-        #expect(s.wordsToday == 3)
-        #expect(s.bestStreakDays == 1)
-        #expect(s.last14Days.last?.words == 3)
-    }
-```
-
-- [ ] **Step 2: Run the test to verify it fails**
-
-Run: `cd /Users/abhishekananad/Documents/Chirp/Packages/ChirpCore && swift test --filter HistoryStatsTests 2>&1 | tail -5`
-Expected: compile error, `value of type 'HistoryStore' has no member 'stats'`.
-
-- [ ] **Step 3: Add the method**
-
-In `HistoryStore.swift`, after the `recent(limit:search:)` method, add:
-
-```swift
-    /// Home page numbers. Loads 60 days so the streak has room; older rows never matter to the stats.
+    /// Rows for the dashboard: the last 60 days, enough for the 14 day chart, this week and the streak.
     public func stats(now: Date = Date(), calendar: Calendar = .current) async throws -> HistoryStats {
         let since = calendar.date(byAdding: .day, value: -60, to: calendar.startOfDay(for: now)) ?? now
         let entries = try await db.read { db in
@@ -432,44 +338,97 @@ In `HistoryStore.swift`, after the `recent(limit:search:)` method, add:
     }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+Note: `activeDays` is "days with at least one entry". Simplify the filter to `Set(entries.map { calendar.startOfDay(for: $0.createdAt) })` if the test passes with that; it should.
 
-Run: `cd /Users/abhishekananad/Documents/Chirp/Packages/ChirpCore && swift test 2>&1 | tail -5`
-Expected: all tests pass, 13 in `HistoryStatsTests`.
+- [ ] **Step 4: Run tests**
+
+Run: `cd Packages/ChirpCore && swift test 2>&1 | tail -5`
+Expected: all pass, including the 11 new tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add Packages/ChirpCore && git commit -m "Add HistoryStore.stats"
+git add Packages/ChirpCore && git commit -m "Add HistoryStats for the dashboard"
 ```
 
 ---
 
-### Task 3: Shared components
+### Task 2: Shared components (spec § 3, § 4.3, § 4.2, § 6.4)
 
 **Files:**
-- Create: `App/UI/Components/WaveView.swift`, `App/UI/Components/StatusDot.swift`, `App/UI/Components/Card.swift`, `App/UI/Components/Banner.swift`, `App/UI/Components/RecordButton.swift`, `App/UI/Components/PageColumn.swift`, `App/UI/Components/VisualEffectView.swift`, `App/UI/Components/CountUpText.swift`, `App/UI/Components/AppIcon.swift`
+- Create: `App/UI/Components/Card.swift`, `StatusDot.swift`, `WaveView.swift`, `RecordButton.swift`, `Banner.swift`
 
 **Interfaces:**
-- Produces: `WaveView(levels:barWidth:gap:minHeight:maxHeight:)`, `StatusDot(color:pulses:)`, `Card { }`, `Banner(text:button:action:)`, `RecordButton(state:action:)` with `RecordButton.State { idle, recording, working, disabled }`, `PageColumn(title:help:) { }`, `VisualEffectView(material:blending:)`, `CountUpText(value:format:)`, `AppIcon(bundleID:size:)`.
+- Produces:
+  ```swift
+  extension View { func card(padding: CGFloat = 20) -> some View }
+  struct StatusDot: View { var color: Color; var pulsing: Bool = false }
+  struct WaveView: View { var levels: [Float]; var barWidth: CGFloat; var minHeight: CGFloat = 4; var maxHeight: CGFloat }
+  enum RecordButtonState { case idle, recording, working, disabled }
+  struct RecordButton: View { var state: RecordButtonState; var action: () -> Void }
+  struct Banner: View { var text: String; var buttonTitle: String; var action: () -> Void }
+  ```
 
-These are views with no logic to unit test. The check is BUILD.
-
-- [ ] **Step 1: Create `App/UI/Components/WaveView.swift`**
+- [ ] **Step 1: Write the files**
 
 ```swift
+// Card.swift
 import SwiftUI
 
-/// Bars that rise with the recorder's levels. Color comes from the parent's foreground style.
-struct WaveView: View {
-    let levels: [Float]
-    var barWidth: CGFloat = 3
-    var gap: CGFloat = 2
-    var minHeight: CGFloat = 4
-    var maxHeight: CGFloat = 24
+private struct CardModifier: ViewModifier {
+    var padding: CGFloat
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.separator, lineWidth: 0.5))
+    }
+}
+
+extension View {
+    func card(padding: CGFloat = 20) -> some View { modifier(CardModifier(padding: padding)) }
+}
+```
+
+```swift
+// StatusDot.swift
+import SwiftUI
+
+struct StatusDot: View {
+    var color: Color
+    var pulsing = false
+    @State private var dim = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: gap) {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
+            .opacity(pulsing && dim ? 0.4 : 1)
+            .onChange(of: pulsing, initial: true) { _, on in
+                guard on else { dim = false; return }
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) { dim = true }
+            }
+    }
+}
+```
+
+```swift
+// WaveView.swift
+import SwiftUI
+
+/// Bars from recorder levels. Height = min + min(1, level × 12) × (max − min).
+struct WaveView: View {
+    var levels: [Float]
+    var barWidth: CGFloat
+    var minHeight: CGFloat = 4
+    var maxHeight: CGFloat
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2) {
             ForEach(Array(levels.enumerated()), id: \.offset) { _, level in
                 Capsule()
                     .frame(width: barWidth, height: minHeight + CGFloat(min(1, level * 12)) * (maxHeight - minHeight))
@@ -481,124 +440,47 @@ struct WaveView: View {
 }
 ```
 
-- [ ] **Step 2: Create `App/UI/Components/StatusDot.swift`**
-
 ```swift
+// RecordButton.swift
 import SwiftUI
 
-struct StatusDot: View {
-    let color: Color
-    var pulses = false
-    @State private var dim = false
-
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .opacity(pulses && dim ? 0.4 : 1)
-            .animation(pulses ? .easeInOut(duration: 1).repeatForever(autoreverses: true) : .default, value: dim)
-            .onAppear { dim = pulses }
-            .onChange(of: pulses) { dim = pulses }
-    }
-}
-```
-
-- [ ] **Step 3: Create `App/UI/Components/Card.swift`**
-
-```swift
-import SwiftUI
-
-struct Card<Content: View>: View {
-    var padding: CGFloat = 20
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        content
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16).fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.separator, lineWidth: 0.5))
-    }
-}
-```
-
-- [ ] **Step 4: Create `App/UI/Components/Banner.swift`**
-
-```swift
-import SwiftUI
-
-struct Banner: View {
-    let text: String
-    let button: String
-    let action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
-            Text(text).font(.callout)
-            Spacer()
-            Button(button, action: action).buttonStyle(.bordered).controlSize(.small)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(.orange.opacity(0.12)))
-    }
-}
-```
-
-- [ ] **Step 5: Create `App/UI/Components/RecordButton.swift`**
-
-```swift
-import SwiftUI
+enum RecordButtonState: Equatable { case idle, recording, working, disabled }
 
 struct RecordButton: View {
-    enum State: Equatable { case idle, recording, working, disabled }
-
-    let state: State
-    let action: () -> Void
-    @SwiftUI.State private var hovering = false
-    @SwiftUI.State private var pressed = false
-    @SwiftUI.State private var breathing = false
+    var state: RecordButtonState
+    var action: () -> Void
+    @State private var hovering = false
+    @State private var pressed = false
+    @State private var breathe = false
 
     var body: some View {
-        ZStack {
-            if state == .recording {
-                Circle()
-                    .fill(.red.opacity(0.25))
-                    .scaleEffect(breathing ? 1.18 : 1)
-                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: breathing)
-                    .onAppear { breathing = true }
-                    .onDisappear { breathing = false }
+        Button(action: action) {
+            ZStack {
+                if state == .recording {
+                    Circle().fill(.red.opacity(0.25))
+                        .scaleEffect(breathe ? 1.18 : 1)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { breathe = true }
+                        }
+                        .onDisappear { breathe = false }
+                }
+                Circle().fill(fill)
+                glyph
             }
-            Circle().fill(fill)
-            switch state {
-            case .working:
-                ProgressView().controlSize(.small).tint(.white)
-            case .recording:
-                Image(systemName: "stop.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(.white)
-            case .idle:
-                Image(systemName: "mic.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(Color(nsColor: .windowBackgroundColor))
-            case .disabled:
-                Image(systemName: "mic.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(.tertiary)
-            }
+            .frame(width: 64, height: 64)
+            .scaleEffect(pressed ? 0.96 : (hovering && clickable ? 1.04 : 1))
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .animation(.easeOut(duration: 0.12), value: pressed)
         }
-        .frame(width: 64, height: 64)
-        .scaleEffect(pressed ? 0.96 : (hovering && isClickable ? 1.04 : 1))
-        .animation(.easeOut(duration: 0.12), value: hovering)
-        .animation(.easeOut(duration: 0.08), value: pressed)
-        .contentShape(Circle())
+        .buttonStyle(.plain)
+        .disabled(!clickable)
         .onHover { hovering = $0 }
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in if isClickable { pressed = true } }
-                .onEnded { _ in
-                    pressed = false
-                    if isClickable { action() }
-                })
-        .accessibilityLabel(state == .recording ? "Stop" : "Talk")
+        .simultaneousGesture(DragGesture(minimumDistance: 0)
+            .onChanged { _ in pressed = true }
+            .onEnded { _ in pressed = false })
     }
 
-    private var isClickable: Bool { state == .idle || state == .recording }
+    private var clickable: Bool { state == .idle || state == .recording }
 
     private var fill: AnyShapeStyle {
         switch state {
@@ -608,146 +490,89 @@ struct RecordButton: View {
         case .disabled: AnyShapeStyle(.quaternary)
         }
     }
-}
-```
 
-- [ ] **Step 6: Create `App/UI/Components/PageColumn.swift`**
-
-```swift
-import SwiftUI
-
-/// The content column every page uses: 760 pt wide, centered, 32 pt padding, room for the hidden title bar.
-struct PageColumn<Content: View>: View {
-    var title: String?
-    var help: String?
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if let title {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title).font(.largeTitle.bold())
-                        if let help {
-                            Text(help).font(.callout).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                content
-            }
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 32)
-            .padding(.top, 44)
-            .padding(.bottom, 32)
+    @ViewBuilder private var glyph: some View {
+        switch state {
+        case .working:
+            ProgressView().controlSize(.small).tint(.white)
+        case .disabled:
+            Image(systemName: "mic.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(.tertiary)
+        case .idle:
+            Image(systemName: "mic.fill").font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(Color(nsColor: .windowBackgroundColor))
+        case .recording:
+            Image(systemName: "stop.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(.white)
         }
     }
 }
 ```
 
-- [ ] **Step 7: Create `App/UI/Components/VisualEffectView.swift`**
-
 ```swift
-import AppKit
+// Banner.swift
 import SwiftUI
 
-struct VisualEffectView: NSViewRepresentable {
-    var material: NSVisualEffectView.Material
-    var blending: NSVisualEffectView.BlendingMode = .behindWindow
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blending
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
-        view.blendingMode = blending
-    }
-}
-```
-
-- [ ] **Step 8: Create `App/UI/Components/CountUpText.swift`**
-
-```swift
-import SwiftUI
-
-/// Text whose number animates when `value` changes under `withAnimation`.
-struct CountUpText: View, Animatable {
-    var value: Double
-    let format: (Double) -> String
-
-    var animatableData: Double {
-        get { value }
-        set { value = newValue }
-    }
+struct Banner: View {
+    var text: String
+    var buttonTitle: String
+    var action: () -> Void
 
     var body: some View {
-        Text(format(value))
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+            Text(text).font(.callout)
+            Spacer()
+            Button(buttonTitle, action: action).buttonStyle(.bordered).controlSize(.small)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.orange.opacity(0.12)))
     }
 }
 ```
 
-- [ ] **Step 9: Create `App/UI/Components/AppIcon.swift`**
+- [ ] **Step 2: Build**
 
-```swift
-import AppKit
-import SwiftUI
-import UniformTypeIdentifiers
+Run the xcodebuild command from Global Constraints. Expected: `BUILD SUCCEEDED`.
 
-struct AppIcon: View {
-    let bundleID: String?
-    var size: CGFloat = 20
-
-    var body: some View {
-        Image(nsImage: Self.icon(for: bundleID))
-            .resizable()
-            .frame(width: size, height: size)
-    }
-
-    @MainActor private static var cache: [String: NSImage] = [:]
-
-    @MainActor static func icon(for bundleID: String?) -> NSImage {
-        guard let bundleID else { return generic }
-        if let cached = cache[bundleID] { return cached }
-        let icon = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-            .map { NSWorkspace.shared.icon(forFile: $0.path) } ?? generic
-        cache[bundleID] = icon
-        return icon
-    }
-
-    private static var generic: NSImage { NSWorkspace.shared.icon(for: .application) }
-}
-```
-
-- [ ] **Step 10: Build**
-
-Run BUILD.
-Expected: `** BUILD SUCCEEDED **`. The new files compile but nothing uses them yet.
-
-- [ ] **Step 11: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add App/UI/Components && git commit -m "Add shared UI components"
+git add App/UI/Components && git commit -m "Add shared UI components"
 ```
 
 ---
 
-### Task 4: Floating bar and controller wiring
+### Task 3: The floating bar and controller wiring (spec § 6, § 4.3 last paragraph)
 
 **Files:**
-- Create: `App/UI/FloatingBar/BarModel.swift`, `App/UI/FloatingBar/FloatingBarView.swift`, `App/UI/FloatingBar/FloatingBarPanel.swift`, `App/UI/FloatingBar/FloatingBarController.swift`
-- Delete: `App/UI/Pill.swift`, `App/UI/FloatingButton.swift`
-- Modify: `App/AppController.swift`, `App/UI/MainView.swift` (two small edits so it still compiles until Task 5 deletes it)
+- Create: `App/UI/FloatingBar.swift`, `App/UI/FloatingBarPanel.swift`
+- Delete: `App/UI/FloatingButton.swift`, `App/UI/Pill.swift`
+- Modify: `App/AppController.swift`
+- Modify: `App/UI/MainView.swift` only where it breaks the build (it is deleted in Task 4; a minimal fix is fine)
 
 **Interfaces:**
-- Consumes: `WaveView`, `StatusDot`, `VisualEffectView` from Task 3.
-- Produces: `BarModel.Phase`, `FloatingBarController` with `model`, `onClick`, `setVisible(_:)`, `setRest(_:)`, `show(_:)`, `flash(_:symbol:warning:seconds:)`, `showPasted()`, `settle()`. On `AppController`: `bar`, `statusText` (short), `statusHint`, `modelProgressText`, `needsAttention`, `hotkeyNeedsRestart`, `startRecording` showing the bar for every source.
+- Produces:
+  ```swift
+  @MainActor @Observable final class BarModel {
+      enum Phase: Equatable { case idle, listening(handsFree: Bool), finishing, pasted, copied, micOff, loading, message(String, isError: Bool) }
+      var phase: Phase; var levels: [Float]   // 20 bars
+      func push(_ level: Float)
+  }
+  @MainActor final class FloatingBarController {
+      let model: BarModel
+      init(controller: AppController)
+      func setVisible(_ visible: Bool)
+      func show(_ phase: BarModel.Phase)          // persistent until the next show
+      func flash(_ phase: BarModel.Phase, for seconds: Double)  // then back to resting phase
+      func rest()                                  // idle, micOff or loading, from controller.status
+  }
+  // AppController additions
+  var statusHint: String        // "Hold Fn in any app" or ""
+  var modelProgressText: String // "1.6 GB of 4.1 GB" or "42%"
+  var isHandsFree: Bool
+  ```
+- Consumes: `WaveView`, `StatusDot` from Task 2.
 
-- [ ] **Step 1: Create `App/UI/FloatingBar/BarModel.swift`**
+- [ ] **Step 1: Write `FloatingBar.swift`**
 
 ```swift
 import Observation
@@ -758,20 +583,13 @@ import SwiftUI
 final class BarModel {
     enum Phase: Equatable {
         case idle
-        case micOff
-        case loading
         case listening(handsFree: Bool)
         case finishing
         case pasted
-        case message(String, symbol: String, warning: Bool)
-
-        /// A resting phase is what the bar shows when nothing is happening.
-        var isResting: Bool {
-            switch self {
-            case .idle, .micOff, .loading: true
-            default: false
-            }
-        }
+        case copied
+        case micOff
+        case loading
+        case message(String, isError: Bool)
     }
 
     static let barCount = 20
@@ -779,146 +597,121 @@ final class BarModel {
     var phase: Phase = .idle
     var levels = Array(repeating: Float(0), count: barCount)
     var hovering = false
-    var showsEscape = false
-    /// The capsule's laid-out width. The transparent panel only reacts to clicks inside it.
-    var contentWidth: CGFloat = 52
 
     func push(_ level: Float) {
         levels.removeFirst()
         levels.append(level)
     }
 
-    func resetLevels() {
-        levels = Array(repeating: 0, count: Self.barCount)
-    }
+    func resetLevels() { levels = Array(repeating: 0, count: Self.barCount) }
 }
-```
-
-- [ ] **Step 2: Create `App/UI/FloatingBar/FloatingBarView.swift`**
-
-```swift
-import SwiftUI
 
 struct FloatingBarView: View {
     let model: BarModel
+    @State private var showEsc = false
 
     var body: some View {
         content
-            .font(.system(size: 13, weight: .medium))
-            .monospacedDigit()
+            .font(.system(size: 13, weight: .medium).monospacedDigit())
             .foregroundStyle(.white)
             .frame(height: 34)
-            .background(VisualEffectView(material: .hudWindow))
-            .background(Color.black.opacity(model.hovering && model.phase == .idle ? 0.42 : 0.3))
-            .clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(model.hovering && model.phase == .idle ? 0.2 : 0.12), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
-            .scaleEffect(model.hovering && model.phase == .idle ? 1.03 : 1)
+            .frame(minWidth: 52)
+            .padding(.horizontal, isCompact ? 0 : 14)
+            .background(
+                Capsule().fill(.black.opacity(model.hovering ? 0.42 : 0.3))
+                    .overlay(Capsule().strokeBorder(.white.opacity(model.hovering ? 0.2 : 0.12), lineWidth: 0.5)))
             .opacity(model.phase == .micOff ? 0.7 : 1)
-            .fixedSize()
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: model.phase)
+            .scaleEffect(model.hovering && isCompact ? 1.03 : 1)
             .animation(.easeOut(duration: 0.12), value: model.hovering)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { model.contentWidth = $0 }
-            .onHover { model.hovering = $0 }
-            .help(help)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: model.phase)
+            .fixedSize()
+            .help(model.phase == .idle ? "Talk · drag to move" : "")
+            .onChange(of: model.phase, initial: true) { _, phase in
+                showEsc = false
+                if case .listening = phase {
+                    Task { try? await Task.sleep(for: .seconds(1)); if case .listening = model.phase { withAnimation { showEsc = true } } }
+                }
+            }
+    }
+
+    private var isCompact: Bool {
+        switch model.phase {
+        case .idle, .pasted, .micOff, .loading: true
+        default: false
+        }
     }
 
     @ViewBuilder private var content: some View {
-        ZStack {
-            switch model.phase {
-            case .idle:
-                Image(systemName: "mic.fill").font(.system(size: 14)).opacity(0.85).frame(width: 52)
-            case .micOff:
-                Image(systemName: "mic.slash.fill").font(.system(size: 14)).opacity(0.5).frame(width: 52)
-            case .loading:
-                ProgressView().controlSize(.small).tint(.white).opacity(0.7).frame(width: 52)
-            case let .listening(handsFree):
-                HStack(spacing: 0) {
-                    if handsFree {
-                        Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(.red)
-                    } else {
-                        StatusDot(color: .red, pulses: true)
-                    }
-                    Spacer()
-                    WaveView(levels: model.levels, barWidth: 2.5, maxHeight: 18)
-                    Spacer()
-                    Text("esc")
-                        .font(.system(size: 10))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white, lineWidth: 1))
-                        .opacity(model.showsEscape ? 0.5 : 0)
-                        .animation(.easeOut(duration: 0.15), value: model.showsEscape)
+        switch model.phase {
+        case .idle:
+            Image(systemName: "mic.fill").font(.system(size: 14)).opacity(0.85).frame(width: 52)
+        case let .listening(handsFree):
+            HStack(spacing: 0) {
+                if handsFree {
+                    Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(.red)
+                } else {
+                    StatusDot(color: .red, pulsing: true)
                 }
-                .padding(.horizontal, 12)
-                .frame(width: 184)
-            case .finishing:
-                HStack(spacing: 9) {
-                    ProgressView().controlSize(.small).tint(.white)
-                    Text("Finishing")
-                }
-                .padding(.horizontal, 14)
-            case .pasted:
-                Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(.green).frame(width: 52)
-            case let .message(text, symbol, warning):
-                HStack(spacing: 9) {
-                    Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(warning ? .orange : .white).opacity(warning ? 1 : 0.85)
-                    Text(text).lineLimit(1)
-                }
-                .padding(.horizontal, 14)
+                Spacer(minLength: 0)
+                WaveView(levels: model.levels, barWidth: 2.5, maxHeight: 18)
+                Spacer(minLength: 0)
+                Text("esc").font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.5), lineWidth: 1))
+                    .opacity(showEsc ? 0.5 : 0)
             }
-        }
-        .transition(.opacity)
-        .id(phaseKey)
-        .animation(.easeOut(duration: 0.15), value: phaseKey)
-    }
-
-    private var phaseKey: String {
-        switch model.phase {
-        case .idle: "idle"
-        case .micOff: "micOff"
-        case .loading: "loading"
-        case let .listening(handsFree): "listening-\(handsFree)"
-        case .finishing: "finishing"
-        case .pasted: "pasted"
-        case let .message(text, _, _): "message-\(text)"
-        }
-    }
-
-    private var help: String {
-        switch model.phase {
-        case .idle: "Talk · drag to move"
-        case .listening: "Click to stop"
-        case .micOff: "Mic is off · click to turn on"
-        default: ""
+            .frame(width: 184 - 28)
+        case .finishing:
+            HStack(spacing: 9) { ProgressView().controlSize(.small).tint(.white); Text("Finishing") }
+        case .pasted:
+            Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(.green).frame(width: 52)
+        case .copied:
+            HStack(spacing: 9) { Image(systemName: "doc.on.clipboard"); Text("Copied · ⌘V to paste") }
+        case .micOff:
+            Image(systemName: "mic.slash.fill").font(.system(size: 14)).opacity(0.5).frame(width: 52)
+        case .loading:
+            ProgressView().controlSize(.small).tint(.white).opacity(0.7).frame(width: 52)
+        case let .message(text, isError):
+            HStack(spacing: 9) {
+                if isError { Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange) }
+                Text(text)
+            }
         }
     }
 }
 ```
 
-- [ ] **Step 3: Create `App/UI/FloatingBar/FloatingBarPanel.swift`**
+- [ ] **Step 2: Write `FloatingBarPanel.swift`**
+
+Keep the click-vs-drag host view from the old `FloatingButton.swift` as is (rename it `FloatingBarHostView`). Add hover tracking and the glass background.
 
 ```swift
 import AppKit
 import SwiftUI
 
 /// Click toggles recording, drag moves the panel. AppKit handles the mouse so a drag never counts as a click.
-/// Only the capsule reacts; the rest of the fixed-size panel is see-through.
-final class FloatingBarHostView: NSView {
+private final class FloatingBarHostView: NSView {
     var onClick: () -> Void = {}
-    var onMoved: () -> Void = {}
-    var capsuleWidth: () -> CGFloat = { 52 }
+    var onMoved: (NSPoint) -> Void = { _ in }
+    var onHover: (Bool) -> Void = { _ in }
     private var dragStart: NSPoint?
     private var windowStart: NSPoint?
     private var dragged = false
+    private var tracking: NSTrackingArea?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let width = capsuleWidth()
-        let capsule = NSRect(x: bounds.midX - width / 2, y: bounds.midY - 17, width: width, height: 34)
-        return capsule.contains(point) ? self : nil
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        tracking = area
     }
+
+    override func mouseEntered(with event: NSEvent) { onHover(true) }
+    override func mouseExited(with event: NSEvent) { onHover(false) }
 
     override func mouseDown(with event: NSEvent) {
         dragStart = NSEvent.mouseLocation
@@ -929,156 +722,142 @@ final class FloatingBarHostView: NSView {
     override func mouseDragged(with event: NSEvent) {
         guard let dragStart, let windowStart, let window else { return }
         let now = NSEvent.mouseLocation
-        let dx = now.x - dragStart.x
-        let dy = now.y - dragStart.y
+        let dx = now.x - dragStart.x, dy = now.y - dragStart.y
         if !dragged && hypot(dx, dy) < 4 { return }
         dragged = true
         window.setFrameOrigin(NSPoint(x: windowStart.x + dx, y: windowStart.y + dy))
     }
 
     override func mouseUp(with event: NSEvent) {
-        if dragged { onMoved() } else { onClick() }
-        dragStart = nil
-        windowStart = nil
+        if dragged, let frame = window?.frame { onMoved(NSPoint(x: frame.midX, y: frame.midY)) } else { onClick() }
+        dragStart = nil; windowStart = nil
     }
 }
 
 /// Never takes focus, so the text still pastes into the app the user was typing in.
-final class FloatingBarPanel: NSPanel {
+private final class FloatingBarPanel: NSPanel {
     init(content: NSView) {
-        super.init(
-            contentRect: NSRect(origin: .zero, size: FloatingBarController.panelSize),
-            styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 52, height: 34),
+                   styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
         isFloatingPanel = true
         hidesOnDeactivate = false
         level = .statusBar
         backgroundColor = .clear
         isOpaque = false
-        hasShadow = false
+        hasShadow = true
         isExcludedFromWindowsMenu = true
         appearance = NSAppearance(named: .darkAqua)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         contentView = content
     }
-
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
-```
-
-- [ ] **Step 4: Create `App/UI/FloatingBar/FloatingBarController.swift`**
-
-```swift
-import AppKit
-import SwiftUI
 
 @MainActor
 final class FloatingBarController {
-    static let panelSize = NSSize(width: 340, height: 80)
     private static let centerKey = "floatingBarCenter"
-    private static let edgeMargin: CGFloat = 12
-    private static let bottomGap: CGFloat = 20
-
     let model = BarModel()
-    var onClick: () -> Void = {}
-
     private let panel: FloatingBarPanel
-    private var wantsVisible = false
-    private var restPhase: BarModel.Phase = .idle
-    private var revertTask: Task<Void, Never>?
-    private var escapeTask: Task<Void, Never>?
+    private let hosting: NSHostingView<FloatingBarView>
+    private let glass = NSVisualEffectView()
+    private weak var controller: AppController?
+    private var flashTask: Task<Void, Never>?
+    private var visible = false
 
-    init() {
-        let host = FloatingBarHostView(frame: NSRect(origin: .zero, size: Self.panelSize))
-        let hosting = NSHostingView(rootView: FloatingBarView(model: model))
+    init(controller: AppController) {
+        self.controller = controller
+        let host = FloatingBarHostView(frame: NSRect(x: 0, y: 0, width: 52, height: 34))
+        glass.material = .hudWindow
+        glass.blendingMode = .behindWindow
+        glass.state = .active
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = 17
+        glass.layer?.masksToBounds = true
+        glass.frame = host.bounds
+        glass.autoresizingMask = [.width, .height]
+        host.addSubview(glass)
+        hosting = NSHostingView(rootView: FloatingBarView(model: model))
         hosting.frame = host.bounds
         hosting.autoresizingMask = [.width, .height]
         hosting.layer?.backgroundColor = .clear
         host.addSubview(hosting)
         panel = FloatingBarPanel(content: host)
-        host.capsuleWidth = { [model] in model.contentWidth }
-        host.onClick = { [weak self] in self?.onClick() }
-        host.onMoved = { [weak self] in self?.saveCenter() }
+        host.onClick = { [weak self] in self?.clicked() }
+        host.onHover = { [weak self] in self?.model.hovering = $0 }
+        host.onMoved = { [weak self] center in
+            UserDefaults.standard.set(NSStringFromPoint(center), forKey: Self.centerKey)
+            self?.layout()
+        }
     }
 
-    /// The "Show floating bar" setting. Off still shows the bar while something is happening.
     func setVisible(_ visible: Bool) {
-        wantsVisible = visible
-        place()
-        applyVisibility()
-    }
-
-    /// What the bar shows when nothing is happening: idle, mic off or loading.
-    func setRest(_ phase: BarModel.Phase) {
-        restPhase = phase
-        if model.phase.isResting { model.phase = phase }
-        applyVisibility()
+        self.visible = visible
+        if visible { rest(); layout(); panel.orderFrontRegardless() } else { panel.orderOut(nil) }
     }
 
     func show(_ phase: BarModel.Phase) {
-        revertTask?.cancel()
-        escapeTask?.cancel()
-        model.showsEscape = false
-        if case .listening = phase {
-            model.resetLevels()
-            escapeTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(1))
-                guard !Task.isCancelled else { return }
-                self?.model.showsEscape = true
-            }
-        }
+        flashTask?.cancel()
+        if case .listening = phase { model.resetLevels() }
         model.phase = phase
-        applyVisibility()
+        layout()
+        if visible || !isResting(phase) { panel.orderFrontRegardless() }
     }
 
-    func flash(_ text: String, symbol: String, warning: Bool = false, seconds: Double = 3) {
-        show(.message(text, symbol: symbol, warning: warning))
-        revert(after: seconds)
-    }
-
-    func showPasted() {
-        show(.pasted)
-        revert(after: 0.4)
-    }
-
-    /// Back to the resting phase.
-    func settle() {
-        show(restPhase)
-    }
-
-    private func revert(after seconds: Double) {
-        revertTask = Task { [weak self] in
+    func flash(_ phase: BarModel.Phase, for seconds: Double) {
+        show(phase)
+        flashTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            self?.settle()
+            self?.rest()
         }
     }
 
-    private func applyVisibility() {
-        if wantsVisible || !model.phase.isResting {
-            if !panel.isVisible { place() }
-            panel.orderFrontRegardless()
-        } else {
-            panel.orderOut(nil)
+    /// The bar's resting look follows the controller's status.
+    func rest() {
+        flashTask?.cancel()
+        guard let controller else { return }
+        switch controller.status {
+        case .paused: model.phase = .micOff
+        case .starting, .loadingModels: model.phase = .loading
+        default: model.phase = .idle
+        }
+        layout()
+        if !visible { panel.orderOut(nil) }
+    }
+
+    private func isResting(_ phase: BarModel.Phase) -> Bool {
+        switch phase { case .idle, .micOff, .loading: true; default: false }
+    }
+
+    private func clicked() {
+        guard let controller else { return }
+        switch model.phase {
+        case .copied, .message: rest()
+        case .micOff:
+            controller.setMicOn(true)
+            flash(.message("Mic on", isError: false), for: 1.5)
+        case .loading:
+            flash(.message("Getting ready · \(controller.modelProgressText)", isError: false), for: 2)
+        case .finishing, .pasted: break
+        case .idle, .listening: controller.toggleRecording(from: .floatingButton)
         }
     }
 
-    // MARK: - Placement
-
-    private func place() {
+    /// Resize around the saved center, kept 12 pt inside the screen. The frame is set without
+    /// animation; SwiftUI animates the content.
+    private func layout() {
+        hosting.layoutSubtreeIfNeeded()
+        let size = hosting.fittingSize
         let center = savedCenter() ?? defaultCenter()
-        let clamped = clamp(center)
-        panel.setFrameOrigin(NSPoint(x: clamped.x - Self.panelSize.width / 2, y: clamped.y - Self.panelSize.height / 2))
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }) ?? NSScreen.main else { return }
+        let bounds = screen.visibleFrame.insetBy(dx: 12, dy: 12)
+        var origin = NSPoint(x: center.x - size.width / 2, y: center.y - size.height / 2)
+        origin.x = min(max(origin.x, bounds.minX), bounds.maxX - size.width)
+        origin.y = min(max(origin.y, bounds.minY), bounds.maxY - size.height)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: false)
     }
 
-    private func saveCenter() {
-        let frame = panel.frame
-        let center = clamp(NSPoint(x: frame.midX, y: frame.midY))
-        panel.setFrameOrigin(NSPoint(x: center.x - Self.panelSize.width / 2, y: center.y - Self.panelSize.height / 2))
-        UserDefaults.standard.set(NSStringFromPoint(center), forKey: Self.centerKey)
-    }
-
-    /// A saved spot is used only while it is still on a screen, for example after a display is unplugged.
     private func savedCenter() -> NSPoint? {
         guard let text = UserDefaults.standard.string(forKey: Self.centerKey) else { return nil }
         let center = NSPointFromString(text)
@@ -1087,445 +866,268 @@ final class FloatingBarController {
 
     private func defaultCenter() -> NSPoint {
         let frame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
-        return NSPoint(x: frame.midX, y: frame.minY + Self.bottomGap + 17)
-    }
-
-    /// Keeps the idle capsule 12 pt inside the screen it is on.
-    private func clamp(_ center: NSPoint) -> NSPoint {
-        let screen = NSScreen.screens.first { $0.visibleFrame.contains(center) } ?? NSScreen.main
-        guard let frame = screen?.visibleFrame else { return center }
-        let halfWidth: CGFloat = 26 + Self.edgeMargin
-        let halfHeight: CGFloat = 17 + Self.edgeMargin
-        return NSPoint(
-            x: min(max(center.x, frame.minX + halfWidth), frame.maxX - halfWidth),
-            y: min(max(center.y, frame.minY + halfHeight), frame.maxY - halfHeight))
+        return NSPoint(x: frame.midX, y: frame.minY + 20 + 17)
     }
 }
 ```
 
-- [ ] **Step 5: Delete the old files**
+- [ ] **Step 3: Rewire `AppController`**
 
-```bash
-cd /Users/abhishekananad/Documents/Chirp && git rm -q App/UI/Pill.swift App/UI/FloatingButton.swift
-```
+Make these exact changes:
 
-- [ ] **Step 6: Rewire `App/AppController.swift`**
-
-Make these edits, in order.
-
-6a. Replace the `status` property declaration
-
-```swift
-    private(set) var status: Status = .starting
-```
-
-with
-
-```swift
-    private(set) var status: Status = .starting {
-        didSet { bar.setRest(restPhase) }
-    }
-```
-
-6b. Remove the `windowText` property and its doc comment (two lines starting `/// The text box in the main window.` and `var windowText = ""`).
-
-6c. Replace
-
-```swift
-    @ObservationIgnored let pill = PillController()
-    @ObservationIgnored private lazy var floatingButton = FloatingButtonController(controller: self)
-```
-
-with
-
-```swift
-    @ObservationIgnored let bar = FloatingBarController()
-    /// Input Monitoring was granted, but the event tap still failed. A relaunch fixes it.
-    private(set) var hotkeyNeedsRestart = false
-```
-
-6d. In `init()`, replace
-
-```swift
-        recorder.onLevel = { [weak self] level in self?.pill.model.push(level) }
-```
-
-with
-
-```swift
-        recorder.onLevel = { [weak self] level in self?.bar.model.push(level) }
-        bar.onClick = { [weak self] in self?.barClicked() }
-```
-
-6e. In `start()`, replace `floatingButton.setVisible(settings.showFloatingButton)` with `bar.setVisible(settings.showFloatingButton)`.
-
-6f. Replace the whole `startHotkeyIfAllowed` method with
-
-```swift
-    func startHotkeyIfAllowed() {
-        guard Permission.inputMonitoring.isGranted else { return }
-        hotkeyNeedsRestart = !hotkey.start()
-    }
-```
-
-6g. Replace the whole `toggleRecording(from:)` method with
-
-```swift
-    /// Click to start, click again to stop. Used by the Home record button.
-    func toggleRecording(from source: RecordingSource) {
-        switch status {
-        case .recording: stopRecording()
-        case .ready: startRecording(from: source)
-        case .loadingModels: bar.flash("Getting ready · \(modelProgressText)", symbol: "arrow.down.circle", seconds: 2)
-        case .failed: bar.flash("Could not load models", symbol: "exclamationmark.circle.fill", warning: true)
-        default: break
-        }
-    }
-
-    private func barClicked() {
-        switch status {
-        case .recording: stopRecording()
-        case .ready: startRecording(from: .floatingButton)
-        case .paused:
-            togglePause()
-            bar.flash("Mic on", symbol: "mic.fill", seconds: 1.5)
-        case .loadingModels, .starting:
-            bar.flash("Getting ready · \(modelProgressText)", symbol: "arrow.down.circle", seconds: 2)
-        case .failed:
-            bar.flash("Could not load models", symbol: "exclamationmark.circle.fill", warning: true)
-        case .working:
-            break
-        }
-    }
-```
-
-6h. In `startRecording(from:)`:
-
-- replace the two `pill.flash` lines inside the first `guard` with
-  ```swift
-            if case .loadingModels = status { bar.flash("Getting ready · \(modelProgressText)", symbol: "arrow.down.circle", seconds: 2) }
-            if case .failed = status { bar.flash("Could not load models", symbol: "exclamationmark.circle.fill", warning: true) }
-  ```
-- replace `pill.flash("Mic not allowed")` with `bar.flash("Microphone not allowed", symbol: "exclamationmark.circle.fill", warning: true)`
-- replace `pill.flash("Mic not available")` with `bar.flash("Microphone not available", symbol: "exclamationmark.circle.fill", warning: true)`
-- replace `if source != .window { pill.show(.recording) }` with
-  ```swift
-        bar.show(.listening(handsFree: source != .hotkey || machine.isHandsFree))
-  ```
-
-6i. In `stopRecording()`:
-
-- replace `if source != .window { pill.show(.working) }` with `bar.show(.finishing)`
-- replace `inserter: source == .window ? KeepInWindowInserter() as any TextInserter : PasteInserter(),` with `inserter: source == .window ? CopyInserter() as any TextInserter : PasteInserter(),`
-
-6j. In `cancelRecording()`, replace `pill.hide()` with `bar.settle()`.
-
-6k. Replace the whole `finish(_:source:)` method with
-
-```swift
-    private func finish(_ outcome: DictationOutcome, source: RecordingSource) {
-        status = .ready
-        recordingSource = nil
-        switch outcome {
-        case .noSpeech:
-            bar.flash("Could not hear you", symbol: "exclamationmark.circle.fill", warning: true)
-        case .transcriptionFailed:
-            bar.flash("Could not transcribe", symbol: "exclamationmark.circle.fill", warning: true)
-        case let .delivered(result):
-            switch result.insert {
-            case .pasted: bar.showPasted()
-            case .copiedNoTextField: bar.flash("Copied · ⌘V to paste", symbol: "doc.on.clipboard")
-            case .copiedNoPermission: bar.flash("Copied · allow Accessibility to paste", symbol: "doc.on.clipboard")
-            }
-            markDictionaryUsed(result.usedDictionaryEntryIDs)
-            historyRevision += 1
-        }
-        // A model change made while dictating is applied now.
-        if loadedEngine != settings.speechEngine || loadedCleanerID != settings.cleanupModelID {
-            Task { await loadModels() }
-        }
-    }
-```
-
-6l. In `settingsChanged(from:)`, replace `floatingButton.setVisible(settings.showFloatingButton)` with `bar.setVisible(settings.showFloatingButton)`.
-
-6m. Replace the whole `// MARK: - Display` section (from `var shouldShowSetup` to the end of `menuBarSymbol`) with
-
-```swift
-    var shouldShowSetup: Bool {
-        switch status {
-        case .loadingModels, .failed: true
-        default: needsSetup
-        }
-    }
-
-    /// Something the Home banner must show.
-    var needsAttention: Bool {
-        if case .failed = status { return true }
-        return needsSetup
-    }
-
+1. Replace `@ObservationIgnored let pill = PillController()` and the `floatingButton` line with:
+   ```swift
+   @ObservationIgnored private(set) lazy var bar = FloatingBarController(controller: self)
+   ```
+2. In `init`, `recorder.onLevel = { [weak self] level in self?.bar.model.push(level) }`.
+3. In `start()`, `bar.setVisible(settings.showFloatingButton)`. In `settingsChanged`, same.
+4. Add a `didSet` on `status` that calls `bar.rest()` when the new value is `.ready`, `.paused`, `.starting` or `.loadingModels` and the bar is not mid-flash. Simplest: in `togglePause()` and at the end of `loadModels()` (both the `.ready` and `.failed` exits) call `bar.rest()`.
+5. `toggleRecording`: `.loadingModels` → `bar.flash(.message("Getting ready · \(modelProgressText)", isError: false), for: 2)`; `.failed` → `bar.flash(.message("Saywise could not load its models", isError: true), for: 3)`.
+6. `startRecording`: the two guard flashes become `bar.flash(.message(...), isError: true), for: 3)` with texts "Getting ready", "Microphone not allowed", "Microphone not available". Replace `if source != .window { pill.show(.recording) }` with `bar.show(.listening(handsFree: isHandsFree))` for every source.
+7. `stopRecording`: replace the pill line with `bar.show(.finishing)` for every source. Keep `KeepInWindowInserter` for `.window`.
+8. `cancelRecording`: `bar.rest()`.
+9. `finish`:
+   ```swift
+   case .noSpeech: bar.flash(.message("No speech heard", isError: true), for: 3)
+   case .transcriptionFailed: bar.flash(.message("Could not hear you", isError: true), for: 3)
+   case let .delivered(result):
+       if source == .window {
+           windowText = result.finalText
+           NSPasteboard.general.clearContents()
+           NSPasteboard.general.setString(result.finalText, forType: .string)
+           bar.flash(.copied, for: 3)
+       } else {
+           switch result.insert {
+           case .pasted: bar.flash(.pasted, for: 0.4)
+           case .copiedNoTextField, .copiedNoPermission: bar.flash(.copied, for: 3)
+           }
+       }
+   ```
+10. Hands-free: add `var isHandsFree: Bool { machine.isHandsFree }`. When the state machine switches to hands-free mid-recording (double tap), the bar must update. In `handle(_:)`, after `machine.handle(event)`, if `status == .recording`, call `bar.show(.listening(handsFree: machine.isHandsFree))` only when the flag changed (keep a `lastHandsFree` private var). This does not reset levels because `show` resets only on entering `.listening` from another phase: change `show` to reset levels only when `model.phase` was not already `.listening`.
+11. Display strings:
+    ```swift
     var statusText: String {
-        if needsAttention, status != .recording, status != .working { return "Needs attention" }
         switch status {
-        case .starting, .loadingModels: return "Getting ready"
-        case .ready: return "Ready"
-        case .recording: return "Listening"
-        case .working: return "Finishing"
-        case .paused: return "Mic is off"
-        case .failed: return "Needs attention"
+        case .starting, .loadingModels: "Getting ready"
+        case .ready: "Ready"
+        case .recording: "Listening"
+        case .working: "Finishing"
+        case .paused: "Mic is off"
+        case .failed: "Needs attention"
         }
     }
-
-    /// The second half of the status line. Empty when there is nothing useful to add.
     var statusHint: String {
-        switch status {
-        case .ready: "Hold \(settings.triggerKey.displayName) in any app"
-        case .loadingModels: modelProgressText
-        default: ""
-        }
+        status == .ready ? "Hold \(settings.triggerKey.displayName) in any app" : ""
     }
-
-    var modelProgressText: String { "\(Int((modelProgress * 100).rounded()))%" }
-
-    var statusColor: Color {
-        switch status {
-        case .ready: needsAttention ? .orange : .green
-        case .recording: .red
-        case .failed: .orange
-        default: .secondary
+    /// "1.6 GB of 4.1 GB" when the loader reports bytes; otherwise a percent.
+    var modelProgressText: String {
+        if let bytes = modelBytes, bytes.total > 0 {
+            let f = ByteCountFormatter(); f.countStyle = .file
+            return "\(f.string(fromByteCount: bytes.done)) of \(f.string(fromByteCount: bytes.total))"
         }
+        return "\(Int((modelProgress * 100).rounded()))%"
     }
+    private(set) var modelBytes: (done: Int64, total: Int64)?  // nil today; the loader gives only a fraction
+    var loadingDetail: String { if case let .loadingModels(m) = status { m } else { "" } }
+    var failureDetail: String { if case let .failed(m) = status { m } else { "" } }
+    ```
+    `modelBytes` stays `nil` unless `EngineLoader` exposes bytes; do not change the engines package.
+12. `menuBarSymbol`: keep.
 
-    private var restPhase: BarModel.Phase {
-        switch status {
-        case .paused: .micOff
-        case .starting, .loadingModels: .loading
-        default: .idle
-        }
-    }
-
-    var menuBarSymbol: String {
-        switch status {
-        case .starting, .loadingModels: "arrow.down.circle"
-        case .ready: "waveform"
-        case .recording: "waveform.circle.fill"
-        case .working: "ellipsis.circle"
-        case .paused: "pause.circle"
-        case .failed: "exclamationmark.triangle"
-        }
-    }
-}
-
-/// Home recordings stay in Saywise: the text is copied, never pasted.
-private struct CopyInserter: TextInserter {
-    func insert(_ text: String) async -> InsertOutcome {
-        await MainActor.run {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-        }
-        return .copiedNoTextField
-    }
-}
-```
-
-and delete the old `KeepInWindowInserter` struct at the bottom of the file.
-
-6n. Add `import SwiftUI` to the imports at the top of the file (for `Color`).
-
-- [ ] **Step 7: Keep `MainView.swift` compiling until Task 5 removes it**
-
-In `App/UI/MainView.swift`:
-- replace `TextEditor(text: $controller.windowText)` with `TextEditor(text: .constant(""))`
-- replace the two `Button("Copy") { copy(controller.windowText) }` / `Button("Clear") { controller.windowText = "" }` lines and their `.disabled` modifiers with nothing (delete those four lines).
-
-- [ ] **Step 8: Build**
-
-Run BUILD.
-Expected: `** BUILD SUCCEEDED **`. If `onGeometryChange` is flagged as unavailable, the deployment target is wrong; it must be macOS 15 in `project.yml` (it is).
-
-- [ ] **Step 9: Run and check the bar by hand**
-
-Run RUN. Then:
-
-1. The bar sits at the bottom center of the screen as a 52 pt dark capsule with a mic glyph.
-2. Hover it: it brightens a little and grows to 1.03.
-3. Hold Fn and speak: the capsule grows to 184 pt, a red dot pulses on the left, bars move with your voice, after one second a small "esc" shows on the right.
-4. Let go: it shows a spinner and "Finishing", then a green check for a moment, then back to the mic.
-5. Click the bar: it records with a red lock instead of the dot. Click again: it finishes.
-6. Drag the bar to the right edge: it stays 12 pt inside. Quit and relaunch: it is still there.
-
-If any of these fail, fix before committing.
-
-- [ ] **Step 10: Commit**
+- [ ] **Step 4: Delete the old files and fix the build**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add -A App && git commit -m "Replace the pill and floating button with one floating bar"
+git rm App/UI/FloatingButton.swift App/UI/Pill.swift
+```
+`MainView.swift` compiles against `controller.statusText` and `windowText`; it should still build. If `pill` is referenced anywhere else, replace with the bar equivalents above.
+
+- [ ] **Step 5: Build and run**
+
+Build. Launch the app. Check: bar appears bottom center, dark, 52 pt. Hold Fn: bar grows, red dot pulses, wave moves. Release: "Finishing", then green tick, then idle. Drag the bar; quit and relaunch; it stays where you left it. Click the bar while paused (Pause from the menu): "Mic on" shows and the mic turns on.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A App && git commit -m "Replace the floating button and pill with one floating bar"
 ```
 
 ---
 
-### Task 5: One window with a sidebar
+### Task 4: One window with a sidebar (spec § 3, § 5.4, § 9)
 
 **Files:**
-- Create: `App/UI/Shell/Page.swift`, `App/UI/Shell/RootView.swift`, `App/UI/Shell/Sidebar.swift`
+- Create: `App/UI/RootView.swift`, `App/UI/Sidebar.swift`
 - Modify: `App/UI/WindowCoordinator.swift`, `App/UI/MenuContent.swift`, `App/ChirpApp.swift`
+- Rename: `App/UI/Settings/ListTabs.swift` → `App/UI/Settings/ListPages.swift` (content unchanged in this task)
 - Delete: `App/UI/MainView.swift`
 
 **Interfaces:**
-- Consumes: `controller.statusText`, `statusHint`, `statusColor` from Task 4.
-- Produces: `enum Page`, `@Observable final class Navigation { var page: Page; var historyFocus: HistoryEntry.ID? }`, `WindowCoordinator.showMain(page:focusEntry:)`, `WindowCoordinator.navigation`. `RootView` switches on `navigation.page`. Until Tasks 6 to 8 land, Home shows a placeholder and History and Settings show today's views.
+- Produces:
+  ```swift
+  enum Page: String, CaseIterable, Identifiable { case home, history, dictionary, snippets, appStyles, settings }
+  struct RootView: View { init(controller: AppController, page: Binding<Page>, historyFocus: Binding<HistoryEntry.ID?>) }
+  // WindowCoordinator
+  func showMain(page: Page? = nil, focusingHistory id: HistoryEntry.ID? = nil)
+  func showHistory() // = showMain(page: .history)
+  func showSettings() // = showMain(page: .settings)
+  ```
+- Consumes: `HomeView` does not exist yet. For this task, the `.home` case shows `Text("Home").font(.largeTitle)`. Task 5 replaces it.
 
-- [ ] **Step 1: Create `App/UI/Shell/Page.swift`**
+- [ ] **Step 1: Write `RootView.swift`**
 
 ```swift
 import ChirpCore
-import Observation
+import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
     case home, history, dictionary, snippets, appStyles, settings
-
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .home: "Home"
-        case .history: "History"
-        case .dictionary: "Dictionary"
-        case .snippets: "Snippets"
-        case .appStyles: "App styles"
-        case .settings: "Settings"
+        case .home: "Home"; case .history: "History"; case .dictionary: "Dictionary"
+        case .snippets: "Snippets"; case .appStyles: "App styles"; case .settings: "Settings"
         }
     }
 
     var symbol: String {
         switch self {
-        case .home: "house"
-        case .history: "clock.arrow.circlepath"
-        case .dictionary: "character.book.closed"
-        case .snippets: "text.badge.plus"
-        case .appStyles: "app.badge"
-        case .settings: "gearshape"
+        case .home: "house"; case .history: "clock.arrow.circlepath"; case .dictionary: "character.book.closed"
+        case .snippets: "text.badge.plus"; case .appStyles: "app.badge"; case .settings: "gearshape"
         }
     }
 }
 
-/// Which page the main window shows. Owned by the window coordinator so the menu can change it.
-@MainActor
-@Observable
-final class Navigation {
+/// Holds the page across window close and reopen, so the menu can open History or Settings directly.
+@MainActor @Observable final class RootState {
     var page: Page = .home
-    /// Set by Home when it opens one entry in History. History clears it once it has scrolled there.
     var historyFocus: HistoryEntry.ID?
+}
+
+struct RootView: View {
+    @Bindable var controller: AppController
+    @Bindable var state: RootState
+
+    var body: some View {
+        NavigationSplitView {
+            Sidebar(controller: controller, page: $state.page)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
+        } detail: {
+            ZStack {
+                switch state.page {
+                case .home: Text("Home").font(.largeTitle)
+                case .history: HistoryView(controller: controller)
+                case .dictionary: PageColumn(title: "Dictionary") { DictionaryTab(controller: controller) }
+                case .snippets: PageColumn(title: "Snippets") { SnippetsTab(controller: controller) }
+                case .appStyles: PageColumn(title: "App styles") { AppStylesTab(controller: controller) }
+                case .settings: PageColumn(title: "Settings") { SettingsView(controller: controller) }
+                }
+            }
+            .id(state.page)
+            .transition(.opacity)
+            .animation(.easeInOut(duration: 0.2), value: state.page)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
+        .frame(minWidth: 820, minHeight: 560)
+    }
+}
+
+/// The content column: title, optional help line, then the page, 760 pt wide and centered.
+struct PageColumn<Content: View>: View {
+    var title: String
+    var help: String? = nil
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.largeTitle.bold())
+                    if let help { Text(help).font(.callout).foregroundStyle(.secondary) }
+                }
+                content()
+            }
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .padding(32)
+            .padding(.top, 12)
+        }
+    }
 }
 ```
 
-- [ ] **Step 2: Create `App/UI/Shell/Sidebar.swift`**
+- [ ] **Step 2: Write `Sidebar.swift`**
 
 ```swift
 import SwiftUI
 
 struct Sidebar: View {
     let controller: AppController
-    @Bindable var navigation: Navigation
+    @Binding var page: Page
 
     var body: some View {
-        List(selection: $navigation.page) {
-            ForEach(Page.allCases) { page in
+        VStack(spacing: 0) {
+            List(Page.allCases, selection: $page) { page in
                 Label(page.title, systemImage: page.symbol).tag(page)
             }
-        }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 24) }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             HStack(spacing: 8) {
-                StatusDot(color: controller.statusColor, pulses: controller.status == .recording)
+                StatusDot(color: statusColor, pulsing: controller.status == .recording)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(controller.statusText).font(.caption)
+                    Text(controller.statusText).font(.caption).fontWeight(.medium)
                     if !controller.statusHint.isEmpty {
                         Text(controller.statusHint).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14).padding(.vertical, 12)
+        }
+    }
+
+    private var statusColor: Color {
+        switch controller.status {
+        case .ready: .green
+        case .recording: .red
+        case .failed: .orange
+        default: Color(nsColor: .tertiaryLabelColor)
         }
     }
 }
 ```
 
-- [ ] **Step 3: Create `App/UI/Shell/RootView.swift`**
+If the `selection` binding type-checks poorly with `Page`, use `List(selection: Binding<Page?>)` and map back with `?? .home`.
 
-```swift
-import SwiftUI
-
-struct RootView: View {
-    @Bindable var controller: AppController
-    let navigation: Navigation
-    private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        NavigationSplitView {
-            Sidebar(controller: controller, navigation: navigation)
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
-        } detail: {
-            page
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.easeInOut(duration: 0.2), value: navigation.page)
-        }
-        .toolbar(removing: .sidebarToggle)
-        .frame(minWidth: 820, minHeight: 560)
-        .onReceive(timer) { _ in controller.startHotkeyIfAllowed() }
-    }
-
-    @ViewBuilder private var page: some View {
-        switch navigation.page {
-        case .home:
-            PageColumn(title: "Home") { Text("Coming next.").foregroundStyle(.secondary) }
-        case .history:
-            HistoryView(controller: controller)
-        case .dictionary:
-            PageColumn(title: "Dictionary") { DictionaryTab(controller: controller).frame(minHeight: 360) }
-        case .snippets:
-            PageColumn(title: "Snippets") { SnippetsTab(controller: controller).frame(minHeight: 360) }
-        case .appStyles:
-            PageColumn(title: "App styles") { AppStylesTab(controller: controller).frame(minHeight: 360) }
-        case .settings:
-            SettingsView(controller: controller)
-        }
-    }
-}
-```
-
-- [ ] **Step 4: Rewrite `App/UI/WindowCoordinator.swift`**
+- [ ] **Step 3: Rewrite `WindowCoordinator.swift`**
 
 ```swift
 import AppKit
 import ChirpCore
 import SwiftUI
 
-/// Opens and reuses the main window and the setup window. They are plain AppKit windows hosting
-/// SwiftUI views, because the app's only scene is the menu bar extra.
+/// One main window (sidebar + pages) and one setup window, both AppKit windows hosting SwiftUI,
+/// because the app's only scene is the menu bar extra.
 @MainActor
 final class WindowCoordinator {
     static let shared = WindowCoordinator()
 
     var controller: AppController?
-    let navigation = Navigation()
+    let rootState = RootState()
     private var windows: [String: NSWindow] = [:]
 
-    func showMain(page: Page? = nil, focusEntry: HistoryEntry.ID? = nil) {
+    func showMain(page: Page? = nil, focusingHistory id: HistoryEntry.ID? = nil) {
         guard let controller else { return }
-        if let page { navigation.page = page }
-        if let focusEntry { navigation.historyFocus = focusEntry }
-        show("main", size: NSSize(width: 980, height: 640), minSize: NSSize(width: 820, height: 560), resizable: true) {
-            RootView(controller: controller, navigation: navigation)
+        if let page { rootState.page = page }
+        if let id { rootState.page = .history; rootState.historyFocus = id }
+        show("main", size: NSSize(width: 980, height: 640), minSize: NSSize(width: 820, height: 560)) {
+            RootView(controller: controller, state: rootState)
         }
     }
 
     func showHistory() { showMain(page: .history) }
-
     func showSettings() { showMain(page: .settings) }
 
     func showSetup() {
@@ -1535,25 +1137,28 @@ final class WindowCoordinator {
         }
     }
 
+    func closeSetup() { windows["setup"]?.close() }
+
     private func show<Content: View>(
-        _ id: String, size: NSSize, minSize: NSSize?, resizable: Bool, @ViewBuilder content: () -> Content
+        _ id: String, size: NSSize, minSize: NSSize?, resizable: Bool = true,
+        @ViewBuilder content: () -> Content
     ) {
         if let window = windows[id] {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate()
             return
         }
-        var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
-        if resizable { style.insert(.resizable) }
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size), styleMask: style, backing: .buffered, defer: false)
+        var mask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        if resizable { mask.insert(.resizable) }
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: mask, backing: .buffered, defer: false)
         window.title = "Saywise"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = !resizable
+        if let minSize { window.minSize = minSize }
         window.contentViewController = NSHostingController(rootView: content())
         window.setContentSize(size)
-        if let minSize { window.contentMinSize = minSize }
         window.center()
         windows[id] = window
         window.makeKeyAndOrderFront(nil)
@@ -1562,7 +1167,9 @@ final class WindowCoordinator {
 }
 ```
 
-- [ ] **Step 5: Rewrite `App/UI/MenuContent.swift`**
+`SetupView` still exists until Task 8. `rootState` is reused so the page survives a close.
+
+- [ ] **Step 4: Rewrite `MenuContent.swift`**
 
 ```swift
 import AppKit
@@ -1574,418 +1181,130 @@ struct MenuContent: View {
     var body: some View {
         Text(controller.statusText)
         Divider()
-        Button("Open Saywise") { WindowCoordinator.shared.showMain(page: .home) }
-            .keyboardShortcut("o")
+        Button("Open Saywise") { WindowCoordinator.shared.showMain() }.keyboardShortcut("o")
         Button("History") { WindowCoordinator.shared.showHistory() }
-        Button("Settings…") { WindowCoordinator.shared.showSettings() }
-            .keyboardShortcut(",")
+        Button("Settings…") { WindowCoordinator.shared.showSettings() }.keyboardShortcut(",")
         Button(controller.status == .paused ? "Resume Saywise" : "Pause Saywise") { controller.togglePause() }
         if controller.shouldShowSetup {
             Button("Finish setup…") { WindowCoordinator.shared.showSetup() }
         }
         Divider()
-        Button("Quit Saywise") { NSApp.terminate(nil) }
-            .keyboardShortcut("q")
+        Button("Quit Saywise") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
 ```
 
-- [ ] **Step 6: Delete `MainView.swift`**
+- [ ] **Step 5: Delete `MainView.swift`, rename `ListTabs.swift`**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git rm -q App/UI/MainView.swift
+git rm App/UI/MainView.swift && git mv App/UI/Settings/ListTabs.swift App/UI/Settings/ListPages.swift
 ```
+`windowText` on the controller stays (Home uses it in Task 5).
 
-`App/ChirpApp.swift` calls `WindowCoordinator.shared.showMain()` with no arguments; that still compiles. No change there.
+- [ ] **Step 6: Build, run, check**
 
-- [ ] **Step 7: Build and run**
+Build. Launch. The window is 980 × 640, hidden title, sidebar with six items, status row at the bottom. Menu bar: History opens the window on History. Close the window, choose Settings from the menu: it reopens on Settings.
 
-Run BUILD, then RUN. Check:
-
-1. One window, 980 × 640, no title text, traffic lights at the top left over the sidebar.
-2. Sidebar lists Home, History, Dictionary, Snippets, App styles, Settings with icons. The bottom shows the status dot, "Ready" and "Hold Fn in any app".
-3. Clicking each item switches the content. Home says "Coming next."
-4. Menu bar: Open Saywise (⌘O) opens Home. History opens the History page. Settings… (⌘,) opens Settings.
-5. Close the window and reopen it from the menu: it keeps its page.
-
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add -A App && git commit -m "Move the app into one window with a sidebar"
+git add -A App && git commit -m "Move all pages into one window with a sidebar"
 ```
 
 ---
 
-### Task 6: Home
+### Task 5: Home (spec § 4)
 
 **Files:**
-- Create: `App/UI/Home/HomeModel.swift`, `App/UI/Home/HomeView.swift`, `App/UI/Home/TalkCard.swift`, `App/UI/Home/StatCard.swift`, `App/UI/Home/ActivityChart.swift`, `App/UI/Home/TopAppsCard.swift`, `App/UI/Home/RecentCard.swift`
-- Modify: `App/UI/Shell/RootView.swift` (the `.home` case), `App/System/Permissions.swift` (add `bannerText` and `requestOrOpenSettings()`)
+- Create: `App/UI/Home/HomeModel.swift`, `HomeView.swift`, `TalkCard.swift`, `StatCard.swift`, `ActivityChart.swift`, `TopAppsCard.swift`, `RecentCard.swift`
+- Modify: `App/UI/RootView.swift` (the `.home` case)
 
 **Interfaces:**
-- Consumes: `HistoryStore.stats`, `HistoryStats`, `Card`, `StatusDot`, `Banner`, `RecordButton`, `PageColumn`, `CountUpText`, `AppIcon`, `WaveView`, `controller.bar.model.levels`, `Navigation`.
-- Produces: `HomeView(controller:navigation:)`, `Permission.bannerText`, `Permission.requestOrOpenSettings()`.
+- Consumes: `HistoryStats` (Task 1), `Card`, `StatusDot`, `WaveView`, `RecordButton`, `Banner` (Task 2), `controller.bar.model.levels`, `controller.statusText`, `statusHint`, `modelProgressText`, `windowText`, `historyRevision`, `toggleRecording(from: .window)`, `setMicOn`, `isMicOn`, `needsSetup`, `loadModels()`.
+- Produces: `HomeView(controller:state:)`.
 
-- [ ] **Step 1: Add to `App/System/Permissions.swift`**
-
-Inside `enum Permission`, after `reason`, add:
-
-```swift
-    var bannerText: String {
-        switch self {
-        case .microphone: "Saywise needs the microphone to hear you."
-        case .accessibility: "Saywise needs Accessibility to paste into other apps."
-        case .inputMonitoring: "Saywise needs Input Monitoring to notice the Fn key."
-        }
-    }
-
-    /// Asks the system when it still can; otherwise opens the right pane of System Settings.
-    func requestOrOpenSettings() {
-        switch self {
-        case .microphone:
-            if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined { request() } else { openSettings() }
-        case .accessibility:
-            request()
-            openSettings()
-        case .inputMonitoring:
-            request()
-            openSettings()
-        }
-    }
-```
-
-- [ ] **Step 2: Create `App/UI/Home/HomeModel.swift`**
+- [ ] **Step 1: `HomeModel.swift`**
 
 ```swift
 import ChirpCore
-import Foundation
 import Observation
+import SwiftUI
 
-@MainActor
-@Observable
+@MainActor @Observable
 final class HomeModel {
-    var stats: HistoryStats?
+    var stats = HistoryStats.empty.with14Days(endingOn: Date(), calendar: .current)
     var recent: [HistoryEntry] = []
-    /// Numbers count up once, on the first load, not on every refresh.
-    var countedUp = false
+    var hasLoadedOnce = false
 
-    var lastEntry: HistoryEntry? { recent.first }
-
-    func load(from history: HistoryStore?) async {
+    func reload(_ history: HistoryStore?) async {
         guard let history else { return }
-        stats = try? await history.stats()
-        recent = (try? await history.recent(limit: 5)) ?? []
+        async let s = history.stats()
+        async let r = history.recent(limit: 5)
+        stats = (try? await s) ?? stats
+        recent = (try? await r) ?? recent
+        hasLoadedOnce = true
     }
 
-    static func greeting(at date: Date = Date(), calendar: Calendar = .current) -> String {
-        switch calendar.component(.hour, from: date) {
-        case 0..<12: "Good morning"
+    var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: "Good morning"
         case 12..<17: "Good afternoon"
         default: "Good evening"
         }
     }
 
-    static func wordsDetail(today: Int, yesterday: Int) -> (text: String, isUp: Bool?) {
-        if yesterday == 0 { return (today == 0 ? "Start talking to see your numbers" : "First words today", nil) }
+    var todayComparison: String {
+        let today = stats.wordsToday, yesterday = stats.wordsYesterday
+        if yesterday == 0 { return today == 0 ? "Start talking to see your numbers" : "First words today" }
         let change = Int(((Double(today) - Double(yesterday)) / Double(yesterday) * 100).rounded())
-        if change == 0 { return ("Same as yesterday", nil) }
-        return (change > 0 ? "+\(change)% vs yesterday" : "−\(abs(change))% vs yesterday", change > 0)
+        if change == 0 { return "Same as yesterday" }
+        return change > 0 ? "+\(change)% vs yesterday" : "−\(-change)% vs yesterday"
     }
 
-    static func timeSaved(seconds: Double) -> String {
-        let minutes = Int((seconds / 60).rounded())
-        if minutes < 60 { return "\(minutes) min" }
-        return "\(minutes / 60) h \(minutes % 60) min"
+    var timeSaved: String {
+        let minutes = Int((stats.secondsSavedThisWeek / 60).rounded())
+        return minutes >= 60 ? "\(minutes / 60) h \(minutes % 60) min" : "\(minutes) min"
     }
 
-    static func streak(days: Int) -> String { days == 1 ? "1 day" : "\(days) days" }
+    var streak: String { stats.streakDays == 1 ? "1 day" : "\(stats.streakDays) days" }
 }
-```
 
-- [ ] **Step 3: Create `App/UI/Home/StatCard.swift`**
+/// What the Talk card shows, derived from the controller.
+enum TalkState: Equatable { case idle, recording, working, micOff, loading, blocked }
 
-```swift
-import SwiftUI
-
-struct StatCard: View {
-    let label: String
-    let value: Double
-    let format: (Double) -> String
-    let detail: String
-    var detailColor: Color = .secondary
-    var animateOnAppear = true
-    @State private var shown: Double = 0
-
-    var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                CountUpText(value: shown, format: format)
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .padding(.top, 2)
-                Text(detail).font(.caption).foregroundStyle(detailColor)
-            }
-        }
-        .onAppear {
-            if animateOnAppear {
-                withAnimation(.easeOut(duration: 0.6)) { shown = value }
-            } else {
-                shown = value
-            }
-        }
-        .onChange(of: value) { shown = value }
-    }
-}
-```
-
-- [ ] **Step 4: Create `App/UI/Home/TalkCard.swift`**
-
-```swift
-import ChirpCore
-import SwiftUI
-
-struct TalkCard: View {
-    let controller: AppController
-    let lastEntry: HistoryEntry?
-    let openEntry: (HistoryEntry.ID) -> Void
-    @State private var hoveringLast = false
-    @State private var copied = false
-
-    var body: some View {
-        Card {
-            HStack(spacing: 20) {
-                RecordButton(state: buttonState) { controller.toggleRecording(from: .window) }
-                middle.frame(width: 200, alignment: .leading)
-                Divider().frame(height: 72)
-                last
-            }
-            .frame(height: 80)
-        }
-    }
-
-    private var buttonState: RecordButton.State {
-        switch controller.status {
+extension AppController {
+    var talkState: TalkState {
+        switch status {
         case .ready: .idle
-        case .recording: .recording
-        case .working: .working
-        default: .disabled
+        case .recording: recordingSource == .window ? .recording : .blocked
+        case .working: recordingSource == .window ? .working : .blocked
+        case .paused: .micOff
+        case .starting, .loadingModels: .loading
+        case .failed: .blocked
         }
     }
 
-    @ViewBuilder private var middle: some View {
-        switch controller.status {
-        case .recording:
-            WaveView(levels: Array(controller.bar.model.levels.suffix(24)) + Array(repeating: 0, count: max(0, 24 - controller.bar.model.levels.count)))
-                .foregroundStyle(.primary)
-        case .working:
-            caption("Finishing…")
-        case .paused:
-            caption("Turn the mic on to talk")
-        case .starting, .loadingModels:
-            VStack(alignment: .leading, spacing: 8) {
-                caption("Getting ready…")
-                ProgressView(value: controller.modelProgress).controlSize(.small)
-                Text(controller.modelProgressText).font(.caption).foregroundStyle(.secondary)
-            }
-        case .failed:
-            caption("Needs attention")
-        case .ready:
-            caption("Press to talk")
+    /// The one banner Home shows, or nil.
+    var homeBanner: (text: String, button: String, action: () -> Void)? {
+        if case .failed = status {
+            return ("Saywise could not load its models.", "Try again", { Task { await self.loadModels() } })
         }
-    }
-
-    private func caption(_ text: String) -> some View {
-        Text(text).font(.body).foregroundStyle(.secondary)
-    }
-
-    @ViewBuilder private var last: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Last dictation").font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                Spacer()
-                if let lastEntry, hoveringLast {
-                    Button {
-                        copy(lastEntry.finalText)
-                        copied = true
-                        Task {
-                            try? await Task.sleep(for: .seconds(1.5))
-                            copied = false
-                        }
-                    } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.secondary)
-                    .help("Copy")
-                }
+        for permission in Permission.allCases where !permission.isGranted {
+            let text = switch permission {
+            case .microphone: "Saywise needs the microphone to hear you."
+            case .accessibility: "Saywise needs Accessibility to paste into other apps."
+            case .inputMonitoring: "Saywise needs Input Monitoring to notice the \(settings.triggerKey.displayName) key."
             }
-            if let lastEntry {
-                Text(lastEntry.finalText).font(.body).lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openEntry(lastEntry.id) }
-                Text("\(lastEntry.appName ?? "Unknown app") · \(lastEntry.createdAt.formatted(.relative(presentation: .named)))")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                Text("Your words will show up here.").font(.body).foregroundStyle(.secondary)
-            }
+            return (text, "Allow", { permission.request(); permission.openSettingsIfCannotAsk() })
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onHover { hoveringLast = $0 }
+        return nil
     }
 }
 ```
 
-- [ ] **Step 5: Create `App/UI/Home/ActivityChart.swift`**
+Add to `Permission` (in `Permissions.swift`): `func openSettingsIfCannotAsk()` that opens System Settings for `.accessibility` and `.inputMonitoring` (the system does not re-prompt those), and does nothing for `.microphone`.
 
-```swift
-import Charts
-import ChirpCore
-import SwiftUI
-
-struct ActivityChart: View {
-    let days: [HistoryStats.Day]
-    @State private var hovered: Date?
-
-    private var maxWords: Int { days.map(\.words).max() ?? 0 }
-
-    var body: some View {
-        Chart(days, id: \.date) { day in
-            BarMark(x: .value("Day", day.date, unit: .day), y: .value("Words", day.words))
-                .foregroundStyle(Color.accentColor.opacity(Calendar.current.isDateInToday(day.date) ? 1 : 0.5))
-                .cornerRadius(4)
-                .annotation(position: .top, spacing: 4) {
-                    if let hovered, Calendar.current.isDate(hovered, inSameDayAs: day.date) {
-                        Text("\(day.date.formatted(.dateTime.weekday(.abbreviated).day())) · \(day.words) words")
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                    }
-                }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { _ in
-                AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
-            }
-        }
-        .chartYAxis(.hidden)
-        .chartYScale(domain: 0...max(1, maxWords))
-        .chartOverlay { proxy in
-            GeometryReader { geometry in
-                Rectangle().fill(.clear).contentShape(Rectangle())
-                    .onContinuousHover { phase in
-                        switch phase {
-                        case let .active(point):
-                            guard let plot = proxy.plotFrame else { return }
-                            hovered = proxy.value(atX: point.x - geometry[plot].origin.x, as: Date.self)
-                        case .ended:
-                            hovered = nil
-                        }
-                    }
-            }
-        }
-        .frame(height: 140)
-        .overlay {
-            if maxWords == 0 {
-                Text("Start talking to see your numbers").font(.callout).foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-```
-
-- [ ] **Step 6: Create `App/UI/Home/TopAppsCard.swift`**
-
-```swift
-import ChirpCore
-import SwiftUI
-
-struct TopAppsCard: View {
-    let apps: [HistoryStats.AppWords]
-
-    private var top: Int { apps.first?.words ?? 1 }
-
-    var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Top apps").font(.headline)
-                if apps.isEmpty {
-                    Text("No apps yet.").font(.body).foregroundStyle(.secondary)
-                }
-                ForEach(apps, id: \.name) { app in
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 10) {
-                            AppIcon(bundleID: app.bundleID)
-                            Text(app.name).font(.body).lineLimit(1)
-                            Spacer()
-                            Text(app.words.formatted()).font(.callout).foregroundStyle(.secondary).monospacedDigit()
-                        }
-                        GeometryReader { geometry in
-                            Capsule().fill(Color.accentColor.opacity(0.5))
-                                .frame(width: geometry.size.width * CGFloat(app.words) / CGFloat(max(1, top)))
-                        }
-                        .frame(height: 3)
-                        .padding(.leading, 30)
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
-- [ ] **Step 7: Create `App/UI/Home/RecentCard.swift`**
-
-```swift
-import ChirpCore
-import SwiftUI
-
-struct RecentCard: View {
-    let entries: [HistoryEntry]
-    let openEntry: (HistoryEntry.ID) -> Void
-    let seeAll: () -> Void
-    @State private var hovered: HistoryEntry.ID?
-
-    var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Recent").font(.headline)
-                    Spacer()
-                    Button("See all", action: seeAll).buttonStyle(.link).font(.caption)
-                }
-                .padding(.bottom, 10)
-                if entries.isEmpty {
-                    Text("Nothing yet.").font(.body).foregroundStyle(.secondary)
-                }
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    if index > 0 { Divider() }
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.finalText).font(.body).lineLimit(1)
-                            Text("\(entry.appName ?? "Unknown app") · \(entry.createdAt.formatted(.relative(presentation: .named)))")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if hovered == entry.id {
-                            Button { copy(entry.finalText) } label: { Image(systemName: "doc.on.doc") }
-                                .buttonStyle(.borderless).foregroundStyle(.secondary).help("Copy")
-                        }
-                    }
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture { openEntry(entry.id) }
-                    .onHover { hovered = $0 ? entry.id : nil }
-                }
-            }
-        }
-    }
-}
-```
-
-- [ ] **Step 8: Create `App/UI/Home/HomeView.swift`**
+- [ ] **Step 2: `HomeView.swift`**
 
 ```swift
 import ChirpCore
@@ -1993,157 +1312,381 @@ import SwiftUI
 
 struct HomeView: View {
     @Bindable var controller: AppController
-    let navigation: Navigation
+    @Bindable var state: RootState
     @State private var model = HomeModel()
-    @State private var missing: Permission?
     @State private var appeared = false
-    private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        PageColumn {
-            header
-            if let banner { banner }
-            TalkCard(controller: controller, lastEntry: model.lastEntry, openEntry: open)
-                .fadeIn(appeared, delay: 0)
-            statsRow.fadeIn(appeared, delay: 0.04)
-            Card {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Last 14 days").font(.headline)
-                    ActivityChart(days: stats.last14Days)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                header
+                if let banner = controller.homeBanner {
+                    Banner(text: banner.text, buttonTitle: banner.button, action: banner.action)
+                }
+                TalkCard(controller: controller, last: model.recent.first, open: openInHistory)
+                HStack(spacing: 16) {
+                    StatCard(label: "Words today", value: model.stats.wordsToday.formatted(), detail: model.todayComparison, animate: !appeared)
+                    StatCard(label: "Time saved", value: model.timeSaved, detail: "this week", animate: false)
+                    StatCard(label: "Dictations", value: model.stats.dictationsThisWeek.formatted(), detail: "this week", animate: !appeared)
+                    StatCard(label: "Streak", value: model.streak, detail: "best \(model.stats.bestStreakDays)", animate: false)
+                }
+                ActivityChart(days: model.stats.last14Days)
+                HStack(alignment: .top, spacing: 16) {
+                    TopAppsCard(apps: model.stats.topApps)
+                    RecentCard(entries: model.recent, open: openInHistory, seeAll: { state.page = .history })
                 }
             }
-            .fadeIn(appeared, delay: 0.08)
-            HStack(alignment: .top, spacing: 16) {
-                TopAppsCard(apps: stats.topApps)
-                RecentCard(entries: model.recent, openEntry: open) { navigation.page = .history }
-            }
-            .fadeIn(appeared, delay: 0.12)
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .padding(32).padding(.top, 12)
         }
-        .task {
-            await model.load(from: controller.history)
-            refreshPermissions()
-            withAnimation(.easeOut(duration: 0.25)) { appeared = true }
-        }
-        .onChange(of: controller.historyRevision) {
-            Task {
-                await model.load(from: controller.history)
-                model.countedUp = true
-            }
-        }
-        .onReceive(timer) { _ in refreshPermissions() }
+        .task { await model.reload(controller.history); withAnimation { appeared = true } }
+        .onChange(of: controller.historyRevision) { Task { await model.reload(controller.history) } }
     }
-
-    private var stats: HistoryStats { model.stats ?? HistoryStats.empty(now: Date(), calendar: .current) }
 
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(HomeModel.greeting()).font(.largeTitle.bold())
+                Text(model.greeting).font(.largeTitle.bold())
                 HStack(spacing: 8) {
-                    StatusDot(color: controller.statusColor, pulses: controller.status == .recording)
+                    StatusDot(color: statusColor, pulsing: controller.status == .recording)
                     Text(controller.statusHint.isEmpty ? controller.statusText : "\(controller.statusText) · \(controller.statusHint)")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.callout)
+                    if case .loadingModels = controller.status { Text(controller.modelProgressText).font(.callout).foregroundStyle(.secondary) }
                 }
             }
             Spacer()
-            Toggle("Mic", isOn: Binding(get: { controller.isMicOn }, set: { controller.setMicOn($0) }))
-                .toggleStyle(.switch)
-                .labelsHidden()
+            Toggle("", isOn: Binding(get: { controller.isMicOn }, set: { controller.setMicOn($0) }))
+                .toggleStyle(.switch).labelsHidden()
                 .disabled(!(controller.status == .ready || controller.status == .paused))
-                .padding(.top, 6)
         }
     }
 
-    @ViewBuilder private var banner: Banner? {
-        if case .failed = controller.status {
-            Banner(text: "Saywise could not load its models.", button: "Try again") { Task { await controller.loadModels() } }
-        } else if let missing {
-            Banner(text: missing.bannerText, button: "Allow") { missing.requestOrOpenSettings() }
+    private var statusColor: Color {
+        switch controller.status {
+        case .ready: .green
+        case .recording: .red
+        case .failed: .orange
+        default: Color(nsColor: .tertiaryLabelColor)
         }
     }
 
-    private var statsRow: some View {
-        let words = HomeModel.wordsDetail(today: stats.wordsToday, yesterday: stats.wordsYesterday)
-        return HStack(spacing: 16) {
-            StatCard(label: "Words today", value: Double(stats.wordsToday), format: { Int($0).formatted() },
-                     detail: words.text, detailColor: words.isUp == true ? .green : .secondary, animateOnAppear: !model.countedUp)
-            StatCard(label: "Time saved", value: stats.secondsSavedThisWeek, format: HomeModel.timeSaved(seconds:),
-                     detail: "this week", animateOnAppear: !model.countedUp)
-            StatCard(label: "Dictations", value: Double(stats.dictationsThisWeek), format: { Int($0).formatted() },
-                     detail: "this week", animateOnAppear: !model.countedUp)
-            StatCard(label: "Streak", value: Double(stats.streakDays), format: { HomeModel.streak(days: Int($0)) },
-                     detail: "best \(stats.bestStreakDays)", animateOnAppear: !model.countedUp)
-        }
-    }
-
-    private func open(_ id: HistoryEntry.ID) {
-        navigation.historyFocus = id
-        navigation.page = .history
-    }
-
-    private func refreshPermissions() {
-        missing = Permission.allCases.first { !$0.isGranted }
-    }
-}
-
-private extension View {
-    /// Cards fade in with a short stagger the first time Home appears.
-    func fadeIn(_ shown: Bool, delay: Double) -> some View {
-        opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 6)
-            .animation(.easeOut(duration: 0.25).delay(delay), value: shown)
+    private func openInHistory(_ entry: HistoryEntry) {
+        state.historyFocus = entry.id
+        state.page = .history
     }
 }
 ```
 
-Note: `@ViewBuilder private var banner: Banner?` returns an optional view; SwiftUI accepts `if let banner { banner }` in the body. If the compiler rejects the optional `@ViewBuilder`, change it to a plain computed `var banner: Banner?` without the attribute and keep the `if/else if` returning values with `return`.
+The orange "Needs attention" dot when a permission is missing: `statusColor` returns `.orange` when `controller.homeBanner != nil`.
 
-- [ ] **Step 9: Switch Home in `RootView`**
-
-In `App/UI/Shell/RootView.swift` replace
+- [ ] **Step 3: `TalkCard.swift`**
 
 ```swift
-        case .home:
-            PageColumn(title: "Home") { Text("Coming next.").foregroundStyle(.secondary) }
+import ChirpCore
+import SwiftUI
+
+struct TalkCard: View {
+    @Bindable var controller: AppController
+    var last: HistoryEntry?
+    var open: (HistoryEntry) -> Void
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 20) {
+            RecordButton(state: buttonState) { controller.toggleRecording(from: .window) }
+            middle.frame(width: 200, alignment: .leading)
+            Divider().frame(height: 72)
+            lastText
+        }
+        .frame(height: 80)
+        .card()
+    }
+
+    private var buttonState: RecordButtonState {
+        switch controller.talkState {
+        case .idle: .idle; case .recording: .recording; case .working: .working
+        case .micOff, .loading, .blocked: .disabled
+        }
+    }
+
+    @ViewBuilder private var middle: some View {
+        switch controller.talkState {
+        case .idle: Text("Press to talk").font(.body).foregroundStyle(.secondary)
+        case .recording: WaveView(levels: controller.bar.model.levels, barWidth: 3, maxHeight: 24).foregroundStyle(.primary)
+        case .working: Text("Finishing…").font(.body).foregroundStyle(.secondary)
+        case .micOff: Text("Turn the mic on to talk").font(.body).foregroundStyle(.secondary)
+        case .blocked: Text(" ").font(.body)
+        case .loading:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Getting ready…").font(.body).foregroundStyle(.secondary)
+                ProgressView(value: controller.modelProgress).controlSize(.small)
+                Text(controller.modelProgressText).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var lastText: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Last dictation").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if let last {
+                    Button { copy(last.finalText); flashCopied() } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless).foregroundStyle(.secondary).help("Copy")
+                }
+            }
+            if let last {
+                Text(last.finalText).font(.body).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { open(last) }
+                Text("\(last.appName ?? "Unknown app") · \(last.createdAt.formatted(.relative(presentation: .named)))")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Your words will show up here.").font(.body).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func flashCopied() {
+        copied = true
+        Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
+    }
+}
 ```
 
-with
+`copy(_:)` is the global function already in `HistoryView.swift`; keep it there.
+
+- [ ] **Step 4: `StatCard.swift`**
 
 ```swift
-        case .home:
-            HomeView(controller: controller, navigation: navigation)
+import SwiftUI
+
+struct StatCard: View {
+    var label: String
+    var value: String
+    var detail: String
+    /// Count up from 0 on first appear when the value is a plain integer.
+    var animate: Bool
+    @State private var shown: Double = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(.caption).fontWeight(.medium).foregroundStyle(.secondary)
+            Text(displayValue)
+                .font(.system(size: 34, weight: .semibold, design: .rounded).monospacedDigit())
+                .contentTransition(.numericText())
+            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+        .onAppear {
+            guard animate, let target = Int(value.filter(\.isNumber)) else { shown = -1; return }
+            withAnimation(.easeOut(duration: 0.6)) { shown = Double(target) }
+        }
+    }
+
+    private var displayValue: String {
+        if shown < 0 { return value }
+        guard let target = Int(value.filter(\.isNumber)), target > 0 else { return value }
+        return Int(shown).formatted()
+    }
+}
 ```
 
-- [ ] **Step 10: Build and run**
+- [ ] **Step 5: `ActivityChart.swift`**
 
-Run BUILD, then RUN. Check:
+```swift
+import Charts
+import ChirpCore
+import SwiftUI
 
-1. Home shows the greeting, the status line, the mic switch, the Talk card, four stat cards, the chart, Top apps and Recent.
-2. Numbers count up once when Home first appears.
-3. Hover a chart bar: a small callout shows the day and the word count.
-4. Click the record button, say a sentence, click stop: the bar shows Finishing then "Copied · ⌘V to paste", and "Last dictation" and Recent update. ⌘V in another app pastes the text.
-5. Hold Fn in another app and dictate: Home's Words today grows after the paste.
-6. Turn the mic switch off: the status says "Mic is off", the record button is grey, the bar dims. Turn it on again.
-7. Click a Recent row: History opens.
+struct ActivityChart: View {
+    var days: [HistoryStats.Day]
+    @State private var hovered: HistoryStats.Day?
 
-- [ ] **Step 11: Commit**
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Last 14 days").font(.headline)
+                Spacer()
+                if let hovered {
+                    Text("\(hovered.date.formatted(.dateTime.weekday(.wide).day().month())) · \(hovered.words) words")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            ZStack {
+                Chart(days, id: \.date) { day in
+                    BarMark(x: .value("Day", day.date, unit: .day), y: .value("Words", day.words))
+                        .foregroundStyle(Color.accentColor.opacity(isToday(day) ? 1 : 0.5))
+                        .cornerRadius(4)
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day)) { _ in
+                        AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                    }
+                }
+                .chartYAxis(.hidden)
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle().fill(.clear).contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case let .active(point):
+                                    let x = point.x - geo[proxy.plotFrame!].origin.x
+                                    if let date: Date = proxy.value(atX: x) {
+                                        hovered = days.first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+                                    }
+                                case .ended: hovered = nil
+                                }
+                            }
+                    }
+                }
+                if days.allSatisfy({ $0.words == 0 }) {
+                    Text("Start talking to see your numbers").font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: 140)
+        }
+        .card()
+    }
+
+    private func isToday(_ day: HistoryStats.Day) -> Bool { Calendar.current.isDateInToday(day.date) }
+}
+```
+
+- [ ] **Step 6: `TopAppsCard.swift` and `RecentCard.swift`**
+
+```swift
+// TopAppsCard.swift
+import AppKit
+import ChirpCore
+import SwiftUI
+
+struct TopAppsCard: View {
+    var apps: [HistoryStats.AppWords]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Top apps").font(.headline)
+            if apps.isEmpty {
+                Text("No apps yet.").font(.callout).foregroundStyle(.secondary)
+            }
+            ForEach(apps) { app in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Image(nsImage: AppIcons.icon(for: app.bundleID)).resizable().frame(width: 20, height: 20)
+                        Text(app.name).font(.body)
+                        Spacer()
+                        Text(app.words.formatted()).font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                    GeometryReader { geo in
+                        Capsule().fill(Color.accentColor.opacity(0.5))
+                            .frame(width: geo.size.width * CGFloat(app.words) / CGFloat(max(1, apps.first?.words ?? 1)))
+                    }
+                    .frame(height: 3).padding(.leading, 30)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+}
+
+/// App icons by bundle id, cached. Unknown ids get the generic app icon.
+@MainActor enum AppIcons {
+    private static var cache: [String: NSImage] = [:]
+    static func icon(for bundleID: String?) -> NSImage {
+        let key = bundleID ?? ""
+        if let hit = cache[key] { return hit }
+        let image: NSImage
+        if let bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            image = NSWorkspace.shared.icon(forFile: url.path)
+        } else {
+            image = NSWorkspace.shared.icon(for: .application)
+        }
+        cache[key] = image
+        return image
+    }
+}
+```
+
+```swift
+// RecentCard.swift
+import ChirpCore
+import SwiftUI
+
+struct RecentCard: View {
+    var entries: [HistoryEntry]
+    var open: (HistoryEntry) -> Void
+    var seeAll: () -> Void
+    @State private var hovered: HistoryEntry.ID?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Recent").font(.headline)
+                Spacer()
+                Button("See all", action: seeAll).buttonStyle(.link).font(.caption)
+            }
+            .padding(.bottom, 8)
+            if entries.isEmpty {
+                Text("Nothing yet.").font(.callout).foregroundStyle(.secondary).padding(.top, 4)
+            }
+            ForEach(entries) { entry in
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.finalText).font(.body).lineLimit(1)
+                        Text("\(entry.appName ?? "Unknown app") · \(entry.createdAt.formatted(.relative(presentation: .named)))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { copy(entry.finalText) } label: { Image(systemName: "doc.on.doc") }
+                        .buttonStyle(.borderless).foregroundStyle(.secondary)
+                        .opacity(hovered == entry.id ? 1 : 0)
+                }
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .onHover { hovered = $0 ? entry.id : nil }
+                .onTapGesture { open(entry) }
+                if entry.id != entries.last?.id { Divider() }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+}
+```
+
+- [ ] **Step 7: Wire `.home` in `RootView`**
+
+Replace `case .home: Text("Home").font(.largeTitle)` with `case .home: HomeView(controller: controller, state: state)`.
+
+- [ ] **Step 8: Build, run, check**
+
+Home shows all blocks. Numbers match: count today's rows in History by hand and compare "Words today". Click the record button, speak, click stop: the bar shows Listening then Finishing then Copied; the text appears under "Last dictation" and the clipboard holds it. Click the last text: History opens (focus lands in Task 6). Turn the mic switch off: button greys out, "Turn the mic on to talk".
+
+- [ ] **Step 9: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add -A App && git commit -m "Add the Home dashboard"
+git add -A App && git commit -m "Add the Home dashboard"
 ```
 
 ---
 
-### Task 7: History page
+### Task 6: History page (spec § 5.1)
 
 **Files:**
-- Modify: `App/UI/HistoryView.swift` (rewrite), `App/UI/Shell/RootView.swift` (pass the navigation)
+- Modify: `App/UI/HistoryView.swift` (rewrite), `App/UI/RootView.swift` (pass `focus`)
 
 **Interfaces:**
-- Consumes: `Navigation.historyFocus`, `PageColumn`, `controller.history`, `controller.deleteHistoryEntry`, `controller.clearHistory`, the global `copy(_:)`.
-- Produces: `HistoryView(controller:navigation:)`.
+- Produces: `HistoryView(controller:focus: Binding<HistoryEntry.ID?>)`.
 
-- [ ] **Step 1: Rewrite `App/UI/HistoryView.swift`**
+- [ ] **Step 1: Rewrite `HistoryView.swift`**
 
 ```swift
 import AppKit
@@ -2152,111 +1695,90 @@ import SwiftUI
 
 struct HistoryView: View {
     let controller: AppController
-    @Bindable var navigation: Navigation
+    @Binding var focus: HistoryEntry.ID?
     @State private var entries: [HistoryEntry] = []
     @State private var search = ""
     @State private var expanded: HistoryEntry.ID?
     @State private var confirmClear = false
 
-    private struct DayGroup: Identifiable {
-        let id: Date
-        let title: String
-        let entries: [HistoryEntry]
-    }
-
     var body: some View {
         ScrollViewReader { proxy in
-            PageColumn {
-                header
-                if entries.isEmpty {
-                    empty
-                } else {
-                    ForEach(groups) { group in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(group.title)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .padding(.top, 8)
-                                .padding(.bottom, 4)
-                            ForEach(group.entries) { entry in
-                                HistoryRow(entry: entry, expanded: expanded == entry.id) {
-                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                                        expanded = expanded == entry.id ? nil : entry.id
-                                    }
-                                } delete: {
-                                    Task { await delete(entry) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("History").font(.largeTitle.bold())
+                        Spacer()
+                        TextField("Search", text: $search).textFieldStyle(.roundedBorder).frame(width: 240)
+                        Menu {
+                            Button("Clear all…", role: .destructive) { confirmClear = true }
+                        } label: { Image(systemName: "ellipsis.circle") }
+                        .menuStyle(.borderlessButton).frame(width: 28)
+                    }
+                    .padding(.bottom, 8)
+                    if entries.isEmpty {
+                        emptyState
+                    }
+                    ForEach(groups, id: \.title) { group in
+                        Text(group.title.uppercased())
+                            .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+                            .kerning(0.6).padding(.top, 22).padding(.bottom, 6)
+                        ForEach(group.entries) { entry in
+                            HistoryRow(entry: entry, expanded: expanded == entry.id) {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                    expanded = expanded == entry.id ? nil : entry.id
                                 }
-                                .id(entry.id)
+                            } delete: {
+                                Task { await delete(entry) }
                             }
+                            .id(entry.id)
                         }
                     }
                 }
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .padding(32).padding(.top, 12)
             }
-            .onChange(of: navigation.historyFocus, initial: true) { focus(with: proxy) }
-            .onChange(of: entries.count) { focus(with: proxy) }
+            .onChange(of: focus, initial: true) { _, id in
+                guard let id else { return }
+                expanded = id
+                focus = nil
+                Task { await Task.yield(); withAnimation { proxy.scrollTo(id, anchor: .center) } }
+            }
         }
-        .task(id: search) { await reload() }
-        .onChange(of: controller.historyRevision) { Task { await reload() } }
         .confirmationDialog("Delete all history?", isPresented: $confirmClear) {
             Button("Delete all", role: .destructive) { Task { await controller.clearHistory() } }
-        } message: {
-            Text("This cannot be undone.")
-        }
+        } message: { Text("This cannot be undone.") }
+        .task(id: search) { await reload() }
+        .onChange(of: controller.historyRevision) { Task { await reload() } }
     }
 
-    private var header: some View {
-        HStack(alignment: .center) {
-            Text("History").font(.largeTitle.bold())
-            Spacer()
-            TextField("Search", text: $search)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 240)
-            Menu {
-                Button("Clear all…", role: .destructive) { confirmClear = true }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-        }
-    }
-
-    private var empty: some View {
-        VStack(spacing: 12) {
+    private var emptyState: some View {
+        VStack(spacing: 10) {
             Image(systemName: "waveform").font(.system(size: 40)).foregroundStyle(.tertiary)
-            Text(search.isEmpty ? "Your dictations will show up here." : "Nothing matches.")
-                .font(.body).foregroundStyle(.secondary)
+            Text("Your dictations will show up here.").font(.body).foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 120)
+        .frame(maxWidth: .infinity).padding(.top, 120)
     }
 
-    private var groups: [DayGroup] {
-        let calendar = Calendar.current
-        let byDay = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.createdAt) }
-        return byDay.keys.sorted(by: >).map { day in
+    private struct Group { var title: String; var entries: [HistoryEntry] }
+
+    private var groups: [Group] {
+        let cal = Calendar.current
+        var result: [Group] = []
+        for entry in entries {
             let title: String
-            if calendar.isDateInToday(day) {
-                title = "Today"
-            } else if calendar.isDateInYesterday(day) {
-                title = "Yesterday"
-            } else {
-                title = day.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
-            }
-            return DayGroup(id: day, title: title, entries: byDay[day] ?? [])
+            if cal.isDateInToday(entry.createdAt) { title = "Today" }
+            else if cal.isDateInYesterday(entry.createdAt) { title = "Yesterday" }
+            else { title = entry.createdAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)) }
+            if result.last?.title == title { result[result.count - 1].entries.append(entry) }
+            else { result.append(Group(title: title, entries: [entry])) }
         }
-    }
-
-    private func focus(with proxy: ScrollViewProxy) {
-        guard let id = navigation.historyFocus, entries.contains(where: { $0.id == id }) else { return }
-        expanded = id
-        proxy.scrollTo(id, anchor: .center)
-        navigation.historyFocus = nil
+        return result
     }
 
     private func reload() async {
         entries = (try? await controller.history?.recent(search: search)) ?? []
+        if let focus, entries.contains(where: { $0.id == focus }) { expanded = focus }
     }
 
     private func delete(_ entry: HistoryEntry) async {
@@ -2270,7 +1792,7 @@ private struct HistoryRow: View {
     let expanded: Bool
     let toggle: () -> Void
     let delete: () -> Void
-    @State private var hovering = false
+    @State private var hovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2281,10 +1803,8 @@ private struct HistoryRow: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if hovering || expanded {
-                    Button { copy(entry.finalText) } label: { Image(systemName: "doc.on.doc") }
-                        .buttonStyle(.borderless).foregroundStyle(.secondary).help("Copy")
-                }
+                Button { copy(entry.finalText) } label: { Image(systemName: "doc.on.doc") }
+                    .buttonStyle(.borderless).foregroundStyle(.secondary).opacity(hovered || expanded ? 1 : 0).help("Copy")
             }
             if expanded {
                 HStack(alignment: .top, spacing: 12) {
@@ -2293,19 +1813,17 @@ private struct HistoryRow: View {
                 }
                 .padding(.top, 12)
                 Text("\(entry.style) · \(entry.language) · \(entry.cleanup) · \(entry.insertOutcome) · speech \(entry.transcribeMs) ms · cleanup \(entry.cleanupMs) ms · paste \(entry.insertMs) ms")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.top, 10)
+                    .font(.caption).foregroundStyle(.secondary).padding(.top, 10)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(expanded ? Color(nsColor: .controlBackgroundColor) : (hovering ? Color.primary.opacity(0.04) : .clear)))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator, lineWidth: expanded ? 0.5 : 0))
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(expanded ? Color(nsColor: .controlBackgroundColor) : .clear))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(.separator, lineWidth: expanded ? 0.5 : 0))
         .contentShape(Rectangle())
+        .onHover { hovered = $0 }
         .onTapGesture(perform: toggle)
-        .onHover { hovering = $0 }
         .contextMenu {
             Button("Copy") { copy(entry.finalText) }
             Button("Delete", role: .destructive, action: delete)
@@ -2315,15 +1833,14 @@ private struct HistoryRow: View {
     private func textBox(_ title: String, _ text: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(title).font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
                 Spacer()
-                Button { copy(text) } label: { Image(systemName: "doc.on.doc") }
-                    .buttonStyle(.borderless).foregroundStyle(.secondary)
+                Button { copy(text) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.borderless).foregroundStyle(.secondary)
             }
             Text(text).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary))
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quaternary))
     }
 }
 
@@ -2334,54 +1851,28 @@ func copy(_ text: String) {
 }
 ```
 
-- [ ] **Step 2: Pass the navigation in `RootView`**
+- [ ] **Step 2: Pass focus from `RootView`**
 
-In `App/UI/Shell/RootView.swift` replace `HistoryView(controller: controller)` with `HistoryView(controller: controller, navigation: navigation)`.
+`case .history: HistoryView(controller: controller, focus: $state.historyFocus)`.
 
-- [ ] **Step 3: Build and run**
+- [ ] **Step 3: Build, run, check**
 
-Run BUILD, then RUN. Check:
-
-1. History shows day groups: Today, Yesterday, then dates.
-2. Click a row: it expands with "Heard" and "Written" boxes and one caption line. Click again: it collapses. Only one row is open at a time.
-3. Search filters the list. Clearing the search shows everything again.
-4. The ··· menu offers "Clear all…" with a confirmation.
-5. From Home, click a Recent row: History opens with that row expanded and in view.
-6. Right-click a row: Copy and Delete work.
+History groups by day, rows expand in place with Heard/Written, only one open at a time. From Home, click a recent row: History opens with that row expanded and in view. Search filters. Clear all asks first. Empty search with no rows shows the waveform empty state.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add -A App && git commit -m "Group history by day and expand rows in place"
+git add -A App && git commit -m "Rewrite History as a grouped list that expands in place"
 ```
 
 ---
 
-### Task 8: Settings and list pages
+### Task 7: Settings and list pages (spec § 5.2, § 5.3)
 
 **Files:**
-- Modify: `App/UI/Settings/SettingsView.swift` (rewrite), `App/UI/Shell/RootView.swift` (the three list cases)
-- Rename: `App/UI/Settings/ListTabs.swift` to `App/UI/Settings/ListPages.swift`, and the types inside to `DictionaryPage`, `SnippetsPage`, `AppStylesPage`
-- Delete: `HistorySettingsTab` (its rows move into `SettingsView`)
-- Modify: `App/UI/SetupView.swift` (`ModelStatusView` moves to `SettingsView.swift`; `SetupView` keeps using it)
+- Modify: `App/UI/Settings/SettingsView.swift` (rewrite), `App/UI/Settings/ListPages.swift` (help lines move to `PageColumn`), `App/UI/RootView.swift` (help strings), `App/UI/SetupView.swift` (`ModelStatusView` only; it moves into `SettingsView.swift`)
 
-**Interfaces:**
-- Consumes: `PageColumn`, `controller.settings`, `controller.loadModels`, `controller.redownloadModels`, `controller.clearHistory`, `controller.modelProgressText`.
-- Produces: `SettingsView(controller:)` (one page), `DictionaryPage`, `SnippetsPage`, `AppStylesPage`, `ModelStatusView` (in `SettingsView.swift`).
-
-- [ ] **Step 1: Rename the list file and its types**
-
-```bash
-cd /Users/abhishekananad/Documents/Chirp && git mv App/UI/Settings/ListTabs.swift App/UI/Settings/ListPages.swift
-```
-
-Then in `ListPages.swift`:
-- rename `struct DictionaryTab` to `struct DictionaryPage`, `struct SnippetsTab` to `struct SnippetsPage`, `struct AppStylesTab` to `struct AppStylesPage`.
-- in `DictionaryPage` and `SnippetsPage`, delete the leading `Text("…").font(.callout).foregroundStyle(.secondary)` help line (the page title carries it now) and wrap the remaining `List` and `Button` in the existing `VStack(alignment: .leading)`, which stays.
-- delete the whole `struct HistorySettingsTab` and everything in it.
-- `AppStylesPage` keeps its `Form` with `.formStyle(.grouped)`.
-
-- [ ] **Step 2: Rewrite `App/UI/Settings/SettingsView.swift`**
+- [ ] **Step 1: Rewrite `SettingsView.swift`**
 
 ```swift
 import AppKit
@@ -2395,91 +1886,70 @@ struct SettingsView: View {
     @State private var confirmClear = false
 
     var body: some View {
-        PageColumn(title: "Settings") {
-            Form {
-                Section("Talk") {
-                    Picker("Talk key", selection: $controller.settings.triggerKey) {
-                        ForEach(TriggerKey.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                    }
-                    Toggle("Show floating bar", isOn: $controller.settings.showFloatingButton)
-                    Toggle("Play sounds", isOn: $controller.settings.soundsEnabled)
+        Form {
+            Section("Talk") {
+                Picker("Talk key", selection: $controller.settings.triggerKey) {
+                    ForEach(TriggerKey.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
-                Section("Language") {
-                    Picker("Language", selection: $controller.settings.languageMode) {
-                        Text("Auto detect").tag(LanguageMode.auto)
-                        Text("English").tag(LanguageMode.english)
-                        Text("Hindi / Hinglish").tag(LanguageMode.hindi)
-                    }
-                    Text("Hindi is always written in Roman letters, for example \"kal meeting hai\".")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Picker("Speech engine", selection: $controller.settings.speechEngine) {
-                        Text("Whisper large-v3-turbo").tag(SpeechEngine.whisper)
-                        Text("Qwen3-ASR 0.6B (testing)").tag(SpeechEngine.qwen3ASR)
-                    }
+                Toggle("Show floating bar", isOn: $controller.settings.showFloatingButton)
+                Toggle("Play sounds", isOn: $controller.settings.soundsEnabled)
+            }
+            Section("Language") {
+                Picker("Language", selection: $controller.settings.languageMode) {
+                    Text("Auto detect").tag(LanguageMode.auto)
+                    Text("English").tag(LanguageMode.english)
+                    Text("Hindi / Hinglish").tag(LanguageMode.hindi)
                 }
-                Section("Models") {
-                    LabeledContent("Status") { ModelStatusView(controller: controller) }
-                    TextField("Cleanup model", text: $modelIDDraft)
-                    HStack {
-                        Button("Apply") { controller.settings.cleanupModelID = modelIDDraft }
-                            .disabled(modelIDDraft == controller.settings.cleanupModelID || modelIDDraft.isEmpty)
-                        Button("Use default") { modelIDDraft = ChirpSettings.defaultCleanupModelID }
-                    }
-                    ForEach(sizes, id: \.0) { name, size in
-                        LabeledContent(name, value: size)
-                    }
-                    HStack {
-                        Button("Show in Finder") { NSWorkspace.shared.open(controller.paths.modelsDirectory) }
-                        Button("Download again") { controller.redownloadModels() }
-                    }
-                }
-                Section("History") {
-                    Picker("Keep history", selection: $controller.settings.historyRetention) {
-                        Text("Off").tag(HistoryRetention.off)
-                        Text("7 days").tag(HistoryRetention.days7)
-                        Text("30 days").tag(HistoryRetention.days30)
-                        Text("Forever").tag(HistoryRetention.forever)
-                    }
-                    Toggle("Keep audio of the last 50 dictations", isOn: $controller.settings.keepAudio)
-                    Button("Show audio folder") { NSWorkspace.shared.open(controller.paths.audioDirectory) }
-                    Button("Delete all history…", role: .destructive) { confirmClear = true }
-                }
-                Section("General") {
-                    Toggle("Start at login", isOn: $controller.settings.launchAtLogin)
-                    if let error = controller.settingsError {
-                        Text(error).foregroundStyle(.orange)
-                    }
+                Text("Hindi is always written in Roman letters, for example \"kal meeting hai\".")
+                    .font(.callout).foregroundStyle(.secondary)
+                Picker("Speech engine", selection: $controller.settings.speechEngine) {
+                    Text("Whisper large-v3-turbo").tag(SpeechEngine.whisper)
+                    Text("Qwen3-ASR 0.6B (testing)").tag(SpeechEngine.qwen3ASR)
                 }
             }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
-            .frame(maxWidth: 600)
+            Section("Models") {
+                LabeledContent("Status") { ModelStatusView(controller: controller) }
+                TextField("Cleanup model", text: $modelIDDraft, prompt: Text("Hugging Face id"))
+                HStack {
+                    Button("Apply") { controller.settings.cleanupModelID = modelIDDraft }
+                        .disabled(modelIDDraft == controller.settings.cleanupModelID || modelIDDraft.isEmpty)
+                    Button("Use default") { modelIDDraft = ChirpSettings.defaultCleanupModelID }
+                }
+                ForEach(sizes, id: \.0) { name, size in LabeledContent(name, value: size) }
+                HStack {
+                    Button("Show in Finder") { NSWorkspace.shared.open(controller.paths.modelsDirectory) }
+                    Button("Download again") { controller.redownloadModels() }
+                }
+            }
+            Section("History") {
+                Picker("Keep history", selection: $controller.settings.historyRetention) {
+                    Text("Off").tag(HistoryRetention.off)
+                    Text("7 days").tag(HistoryRetention.days7)
+                    Text("30 days").tag(HistoryRetention.days30)
+                    Text("Forever").tag(HistoryRetention.forever)
+                }
+                Toggle("Keep audio of the last 50 dictations", isOn: $controller.settings.keepAudio)
+                Button("Show audio folder") { NSWorkspace.shared.open(controller.paths.audioDirectory) }
+                Button("Delete all history…", role: .destructive) { confirmClear = true }
+            }
+            Section("General") {
+                Toggle("Start at login", isOn: $controller.settings.launchAtLogin)
+                if let error = controller.settingsError { Text(error).foregroundStyle(.orange) }
+            }
         }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .scrollDisabled(true)
         .confirmationDialog("Delete all history?", isPresented: $confirmClear) {
             Button("Delete all", role: .destructive) { Task { await controller.clearHistory() } }
-        } message: {
-            Text("This cannot be undone.")
-        }
+        } message: { Text("This cannot be undone.") }
         .onAppear {
             modelIDDraft = controller.settings.cleanupModelID
             sizes = Self.folderSizes(in: controller.paths.modelsDirectory)
         }
     }
 
-    static func folderSizes(in directory: URL) -> [(String, String)] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-        return names.sorted().map { name in
-            let url = directory.appendingPathComponent(name)
-            var bytes: Int64 = 0
-            let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey]
-            if let files = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys) {
-                for case let file as URL in files {
-                    bytes += Int64((try? file.resourceValues(forKeys: Set(keys)).totalFileAllocatedSize) ?? 0)
-                }
-            }
-            return (name, ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
-        }
-    }
+    static func folderSizes(in directory: URL) -> [(String, String)] { /* unchanged from the old ModelsTab */ }
 }
 
 struct ModelStatusView: View {
@@ -2487,16 +1957,18 @@ struct ModelStatusView: View {
 
     var body: some View {
         switch controller.status {
-        case .loadingModels, .starting:
-            HStack(spacing: 8) {
-                ProgressView(value: controller.modelProgress).frame(width: 120)
-                Text(controller.modelProgressText).font(.callout).foregroundStyle(.secondary).monospacedDigit()
+        case .loadingModels:
+            VStack(alignment: .trailing, spacing: 4) {
+                ProgressView(value: controller.modelProgress).frame(width: 160)
+                Text(controller.modelProgressText).font(.caption).foregroundStyle(.secondary)
             }
         case .failed:
             HStack(spacing: 8) {
                 Label("Could not load", systemImage: "exclamationmark.circle.fill").foregroundStyle(.orange)
                 Button("Try again") { Task { await controller.loadModels() } }.controlSize(.small)
             }
+        case .starting:
+            Text("Starting…").foregroundStyle(.secondary)
         default:
             Label("Ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
         }
@@ -2504,60 +1976,43 @@ struct ModelStatusView: View {
 }
 ```
 
-- [ ] **Step 3: Remove the old `ModelStatusView` from `App/UI/SetupView.swift`**
+Copy `folderSizes` from the old `ModelsTab` as is. Remove `ModelStatusView` and `HistorySettingsTab` from the old files. `scrollDisabled(true)` is because `PageColumn` already scrolls; if the form clips, remove it and give the form a fixed height instead.
 
-Delete the whole `struct ModelStatusView` at the bottom of `SetupView.swift`. `SetupView` still uses `ModelStatusView(controller:)`, which now lives in `SettingsView.swift`.
+- [ ] **Step 2: List pages**
 
-- [ ] **Step 4: Update the list cases in `RootView`**
+In `ListPages.swift`, remove the first `Text(...)` help line from `DictionaryTab` and `SnippetsTab`. In `RootView`, pass them as `help:`:
 
-Replace the three list cases with:
+- Dictionary: `Words Saywise must spell exactly. "Heard as" lists what the speech model writes instead, separated by commas.`
+- Snippets: `Say the trigger and Saywise types the text. Example: "my email".`
+- App styles: `Pick a writing style per app. Browser title rules win inside browsers.`
+- Settings: no help line.
 
-```swift
-        case .dictionary:
-            PageColumn(title: "Dictionary", help: "Words Saywise must spell exactly. \"Heard as\" lists what the speech model writes instead, separated by commas.") {
-                DictionaryPage(controller: controller).frame(minHeight: 400)
-            }
-        case .snippets:
-            PageColumn(title: "Snippets", help: "Say the trigger and Saywise types the text. Example: \"my email\".") {
-                SnippetsPage(controller: controller).frame(minHeight: 400)
-            }
-        case .appStyles:
-            PageColumn(title: "App styles", help: "How Saywise writes in each app.") {
-                AppStylesPage(controller: controller).frame(minHeight: 400)
-            }
-```
+Give each `List` in the two list pages `.frame(minHeight: 320)` and `.scrollContentBackground(.hidden)` with `.card(padding: 0)` so it reads as a card. `AppStylesTab` keeps its grouped form with `.scrollContentBackground(.hidden)` and `.scrollDisabled(true)`.
 
-- [ ] **Step 5: Build and run**
+- [ ] **Step 3: Build, run, check**
 
-Run BUILD, then RUN. Check:
+Settings is one page with five sections. Models shows the green check. Dictionary, Snippets, App styles show a title, a help line, and their editors. Adding and deleting rows still works.
 
-1. Settings is one page with Talk, Language, Models, History, General. No tab bar.
-2. "Talk key" and "Show floating bar" labels. Turning "Show floating bar" off hides the bar; a Fn recording still shows it while it runs.
-3. Models shows a green check and "Ready".
-4. Dictionary, Snippets and App styles show a title and one help line above their lists.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add -A App && git commit -m "Make Settings one page and give the list pages titles"
+git add -A App && git commit -m "Flatten Settings into one page and frame the list pages"
 ```
 
 ---
 
-### Task 9: First run
+### Task 8: First run as steps (spec § 7)
 
 **Files:**
 - Create: `App/UI/OnboardingView.swift`
 - Delete: `App/UI/SetupView.swift`
-- Modify: `App/UI/WindowCoordinator.swift` (`showSetup` uses `OnboardingView`), `App/System/Permissions.swift` (`reason` strings), `App/ChirpApp.swift` (open setup only when needed)
+- Modify: `App/System/Permissions.swift` (`reason` strings), `App/UI/WindowCoordinator.swift` (`showSetup` uses `OnboardingView`), `App/ChirpApp.swift` (no change expected), `App/AppController.swift` (`loadModels` failure still calls `showSetup()`; keep)
 
 **Interfaces:**
-- Consumes: `Permission.isGranted`, `request()`, `openSettings()`, `controller.status`, `modelProgress`, `modelProgressText`, `hotkeyNeedsRestart`, `AppRelauncher.relaunch()`, `controller.loadModels()`.
 - Produces: `OnboardingView(controller:)`.
+- Consumes: `Permission`, `AppRelauncher`, `controller.status`, `modelProgress`, `modelProgressText`, `failureDetail`, `loadModels()`, `startHotkeyIfAllowed()`, `WindowCoordinator.shared.closeSetup()`, `showMain()`.
 
-- [ ] **Step 1: Shorten the reasons in `App/System/Permissions.swift`**
-
-Replace the `reason` property body with:
+- [ ] **Step 1: Permission reasons**
 
 ```swift
     var reason: String {
@@ -2567,330 +2022,263 @@ Replace the `reason` property body with:
         case .inputMonitoring: "So Saywise notices when you hold Fn."
         }
     }
+
+    /// The system does not ask twice for these two, so the step opens System Settings instead.
+    func openSettingsIfCannotAsk() {
+        if self != .microphone { openSettings() }
+    }
 ```
 
-- [ ] **Step 2: Create `App/UI/OnboardingView.swift`**
+(`openSettingsIfCannotAsk` was added in Task 5; keep one copy.)
+
+- [ ] **Step 2: `OnboardingView.swift`**
 
 ```swift
 import AppKit
-import ChirpCore
 import SwiftUI
 
 struct OnboardingView: View {
-    enum Step: Hashable {
-        case welcome
-        case permission(Permission)
-        case fnKey
-        case download
-        case done
-    }
-
     let controller: AppController
     @State private var steps: [Step] = []
     @State private var index = 0
-    @State private var granted = false
-    @State private var showDetails = false
+    @State private var justGranted = false
+    @State private var needsRestart = false
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    private static let seenKey = "onboardingSeen"
+
+    enum Step: Equatable {
+        case welcome, permission(Permission), fnKey, download, done
+    }
 
     var body: some View {
         ZStack {
-            if let step = steps[safe: index] {
-                page(for: step)
-                    .id(step)
+            if steps.indices.contains(index) {
+                page(for: steps[index])
+                    .id(index)
                     .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
                                             removal: .move(edge: .leading).combined(with: .opacity)))
             }
         }
-        .frame(width: 480, height: 420)
-        .overlay(alignment: .bottom) { dots.padding(.bottom, 18) }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: index)
-        .onAppear(perform: buildSteps)
-        .onReceive(timer) { _ in tick() }
-        .onExitCommand { }
-    }
-
-    // MARK: - Steps
-
-    private func buildSteps() {
-        let firstRun = !UserDefaults.standard.bool(forKey: Self.seenKey)
-        var list: [Step] = []
-        if firstRun { list.append(.welcome) }
-        list += Permission.allCases.filter { !$0.isGranted }.map { Step.permission($0) }
-        if firstRun && controller.settings.triggerKey == .fn { list.append(.fnKey) }
-        if !modelsReady { list.append(.download) }
-        list.append(.done)
-        steps = list
-        index = 0
-    }
-
-    private var modelsReady: Bool {
-        switch controller.status {
-        case .ready, .paused, .recording, .working: true
-        default: false
-        }
-    }
-
-    private func advance() {
-        granted = false
-        showDetails = false
-        if index + 1 < steps.count {
-            index += 1
-            if case .download = steps[index], modelsReady { advance() }
-        }
-    }
-
-    private func tick() {
-        controller.startHotkeyIfAllowed()
-        guard let step = steps[safe: index] else { return }
-        switch step {
-        case let .permission(permission):
-            if permission.isGranted && !granted {
-                granted = true
-                Task {
-                    try? await Task.sleep(for: .seconds(0.6))
-                    advance()
+        .frame(width: 480, height: 420)
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 6) {
+                ForEach(steps.indices, id: \.self) { i in
+                    Circle().fill(i == index ? Color.primary : Color(nsColor: .tertiaryLabelColor)).frame(width: 6, height: 6)
                 }
             }
-        case .download:
-            if modelsReady { advance() }
-        default:
-            break
+            .padding(.bottom, 18)
         }
+        .onAppear { steps = Self.buildSteps(controller: controller); index = 0 }
+        .onReceive(timer) { _ in tick() }
+        .onExitCommand { }  // Esc does nothing here.
     }
 
-    private func finish() {
-        UserDefaults.standard.set(true, forKey: Self.seenKey)
-        NSApp.keyWindow?.close()
-        WindowCoordinator.shared.showMain(page: .home)
+    static func buildSteps(controller: AppController) -> [Step] {
+        var steps: [Step] = [.welcome]
+        for p in [Permission.microphone, .inputMonitoring, .accessibility] where !p.isGranted { steps.append(.permission(p)) }
+        if controller.settings.triggerKey == .fn { steps.append(.fnKey) }
+        switch controller.status {
+        case .ready, .paused, .recording, .working: break
+        default: steps.append(.download)
+        }
+        steps.append(.done)
+        return steps
     }
-
-    // MARK: - Pages
 
     @ViewBuilder private func page(for step: Step) -> some View {
         switch step {
         case .welcome:
             StepPage(symbol: "waveform", title: "Welcome to Saywise",
                      line: "Hold Fn, speak, let go. Your words appear where you type. English, Hindi, or both. Everything stays on this Mac.",
-                     button: "Continue", action: advance)
-        case let .permission(permission):
-            StepPage(symbol: granted ? "checkmark.circle.fill" : symbol(for: permission),
-                     symbolColor: granted ? .green : .accentColor,
-                     title: permission.title,
-                     line: needsRestart(permission) ? "Saywise needs a quick restart to use this." : permission.reason,
-                     button: needsRestart(permission) ? "Restart Saywise" : "Allow") {
-                if needsRestart(permission) { AppRelauncher.relaunch() } else { permission.requestOrOpenSettings() }
+                     button: "Continue", action: next)
+        case let .permission(p):
+            StepPage(symbol: symbol(for: p), title: p.title, line: p.reason,
+                     button: needsRestart && p == .inputMonitoring ? "Restart Saywise" : "Allow",
+                     secondLine: needsRestart && p == .inputMonitoring ? "Saywise needs a quick restart to use this." : nil,
+                     granted: justGranted) {
+                if needsRestart && p == .inputMonitoring { AppRelauncher.relaunch(); return }
+                p.request(); p.openSettingsIfCannotAsk()
             }
         case .fnKey:
             StepPage(symbol: "globe", title: "One setting for Fn",
                      line: "By default Fn opens the emoji picker. Set \"Press 🌐 key to\" to \"Do Nothing\".",
-                     button: "Open Keyboard Settings",
-                     action: { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!) },
-                     secondary: "Done, continue", secondaryAction: advance)
+                     button: "Open Keyboard Settings", secondaryButton: "Done, continue", secondaryAction: next) {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+            }
         case .download:
-            downloadPage
+            DownloadStep(controller: controller)
         case .done:
             StepPage(symbol: "checkmark.circle.fill", symbolColor: .green, title: "You're set",
-                     line: "Hold Fn in any app and start talking.", button: "Open Saywise", action: finish)
-        }
-    }
-
-    private var downloadPage: some View {
-        VStack(spacing: 0) {
-            Image(systemName: "arrow.down.circle").font(.system(size: 44)).foregroundStyle(Color.accentColor).padding(.bottom, 18)
-            Text("Downloading models").font(.title2.weight(.semibold)).padding(.bottom, 8)
-            if case let .failed(message) = controller.status {
-                Text("The download stopped.").font(.body).foregroundStyle(.secondary).padding(.bottom, 20)
-                Button("Try again") { Task { await controller.loadModels() } }.buttonStyle(.borderedProminent)
-                Button(showDetails ? "Hide details" : "Details") { showDetails.toggle() }.buttonStyle(.link).font(.caption).padding(.top, 8)
-                if showDetails {
-                    Text(message).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 40)
-                }
-            } else {
-                Text("About 4 GB, once. After this, Saywise never uses the network.")
-                    .font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 340).padding(.bottom, 24)
-                ProgressView(value: controller.modelProgress).frame(width: 240)
-                Text(controller.modelProgressText).font(.caption).foregroundStyle(.secondary).monospacedDigit().padding(.top, 6)
-            }
-        }
-        .padding(40)
-    }
-
-    private var dots: some View {
-        HStack(spacing: 6) {
-            ForEach(steps.indices, id: \.self) { i in
-                Circle().fill(i == index ? Color.primary : Color.secondary.opacity(0.3)).frame(width: 6, height: 6)
+                     line: "Hold Fn in any app and start talking.", button: "Open Saywise") {
+                WindowCoordinator.shared.closeSetup()
+                WindowCoordinator.shared.showMain()
             }
         }
     }
 
-    private func symbol(for permission: Permission) -> String {
-        switch permission {
-        case .microphone: "mic.fill"
-        case .accessibility: "accessibility"
-        case .inputMonitoring: "keyboard"
-        }
+    private func symbol(for p: Permission) -> String {
+        switch p { case .microphone: "mic.fill"; case .inputMonitoring: "keyboard"; case .accessibility: "accessibility" }
     }
 
-    private func needsRestart(_ permission: Permission) -> Bool {
-        permission == .inputMonitoring && permission.isGranted && controller.hotkeyNeedsRestart
+    private func next() {
+        justGranted = false
+        if index + 1 < steps.count { index += 1 }
+    }
+
+    /// Once a second: move past a granted permission, past a finished download, and detect the restart case.
+    private func tick() {
+        guard steps.indices.contains(index) else { return }
+        switch steps[index] {
+        case let .permission(p) where p.isGranted:
+            if p == .inputMonitoring {
+                controller.startHotkeyIfAllowed()
+                if !controller.hotkeyIsRunning { needsRestart = true; return }
+            }
+            guard !justGranted else { return }
+            justGranted = true
+            Task { try? await Task.sleep(for: .seconds(0.6)); next() }
+        case .download:
+            switch controller.status {
+            case .ready, .paused: next()
+            default: break
+            }
+        default: break
+        }
     }
 }
 
 private struct StepPage: View {
-    let symbol: String
+    var symbol: String
     var symbolColor: Color = .accentColor
-    let title: String
-    let line: String
-    let button: String
-    let action: () -> Void
-    var secondary: String?
-    var secondaryAction: () -> Void = {}
+    var title: String
+    var line: String
+    var button: String
+    var secondLine: String? = nil
+    var secondaryButton: String? = nil
+    var secondaryAction: (() -> Void)? = nil
+    var granted = false
+    var action: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            Image(systemName: symbol).font(.system(size: 44)).foregroundStyle(symbolColor).padding(.bottom, 18)
-                .contentTransition(.symbolEffect(.replace))
-            Text(title).font(.title2.weight(.semibold)).padding(.bottom, 8)
-            Text(line).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 340).padding(.bottom, 26)
-            Button(button, action: action).buttonStyle(.borderedProminent).controlSize(.large)
-            if let secondary {
-                Button(secondary, action: secondaryAction).buttonStyle(.link).font(.callout).padding(.top, 10)
+            Spacer()
+            ZStack {
+                Image(systemName: symbol).font(.system(size: 44)).foregroundStyle(symbolColor).opacity(granted ? 0 : 1)
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 44)).foregroundStyle(.green).opacity(granted ? 1 : 0)
             }
+            .animation(.easeOut(duration: 0.2), value: granted)
+            .padding(.bottom, 18)
+            Text(title).font(.title2.weight(.semibold)).padding(.bottom, 8)
+            Text(line).font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 340)
+            if let secondLine {
+                Text(secondLine).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.top, 6)
+            }
+            Button(button, action: action).buttonStyle(.borderedProminent).controlSize(.large).padding(.top, 26)
+            if let secondaryButton, let secondaryAction {
+                Button(secondaryButton, action: secondaryAction).buttonStyle(.link).padding(.top, 10)
+            }
+            Spacer()
         }
         .padding(40)
     }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+private struct DownloadStep: View {
+    let controller: AppController
+    @State private var showDetails = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            Image(systemName: "arrow.down.circle").font(.system(size: 44)).foregroundStyle(Color.accentColor).padding(.bottom, 18)
+            Text("Downloading models").font(.title2.weight(.semibold)).padding(.bottom, 8)
+            Text("About 4 GB, once. After this, Saywise never uses the network.")
+                .font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 340)
+            Group {
+                if case .failed = controller.status {
+                    VStack(spacing: 8) {
+                        Text("The download stopped.").font(.callout)
+                        Button("Try again") { Task { await controller.loadModels() } }.buttonStyle(.borderedProminent)
+                        Button(showDetails ? "Hide details" : "Details") { showDetails.toggle() }.buttonStyle(.link).font(.caption)
+                        if showDetails {
+                            Text(controller.failureDetail).font(.caption).foregroundStyle(.secondary)
+                                .textSelection(.enabled).frame(maxWidth: 360)
+                        }
+                    }
+                } else {
+                    VStack(spacing: 6) {
+                        ProgressView(value: controller.modelProgress).frame(width: 260)
+                        Text(controller.modelProgressText).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.top, 26)
+            Spacer()
+        }
+        .padding(40)
+    }
 }
 ```
 
-- [ ] **Step 3: Delete `SetupView.swift` and point the coordinator at the new view**
+Add to `AppController`: `var hotkeyIsRunning: Bool { hotkey.isRunning }`. If `HotkeyMonitor` has no such flag, add `private(set) var isRunning = false` set to `true` when the event tap is created successfully and `false` when it fails.
+
+- [ ] **Step 3: Wire and delete**
+
+In `WindowCoordinator.showSetup`, host `OnboardingView(controller: controller)`. The setup window must not be resizable (already set in Task 4).
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git rm -q App/UI/SetupView.swift
+git rm App/UI/SetupView.swift
 ```
 
-In `App/UI/WindowCoordinator.swift`, inside `showSetup()`, replace `SetupView(controller: controller)` with `OnboardingView(controller: controller)`.
+In `AppDelegate.applicationDidFinishLaunching`, keep: show main, then show setup when `needsSetup` or a settings error. Also show setup when models are not loaded on first launch: `controller.shouldShowSetup`.
 
-- [ ] **Step 4: Open setup only when needed in `App/ChirpApp.swift`**
+- [ ] **Step 4: Build, run, check**
 
-Replace the body of `applicationDidFinishLaunching` with:
+Run with Input Monitoring removed in System Settings for Saywise: setup opens with Welcome, then Input Monitoring. Grant it: green check, moves on. The dots at the bottom track the step. "You're set" opens the main window and closes setup. Esc does nothing.
 
-```swift
-        WindowCoordinator.shared.controller = controller
-        controller.start()
-        if controller.needsSetup || controller.settingsError != nil || !UserDefaults.standard.bool(forKey: "onboardingSeen") {
-            WindowCoordinator.shared.showSetup()
-        } else {
-            WindowCoordinator.shared.showMain()
-        }
-```
-
-- [ ] **Step 5: Build and run the first-run flow**
-
-Run BUILD. Then reset the one-time flag and run:
+- [ ] **Step 5: Commit**
 
 ```bash
-defaults delete dev.saywise.app onboardingSeen 2>/dev/null; open /Users/abhishekananad/Documents/Chirp/build/Build/Products/Debug/Saywise.app
-```
-
-Check:
-
-1. A 480 × 420 window with "Welcome to Saywise", a waveform symbol, one line and a Continue button. Dots at the bottom.
-2. Continue slides to the next step. With every permission already granted, the next step is "One setting for Fn", then "You're set".
-3. "Open Saywise" closes setup and opens Home.
-4. Relaunch: setup does not show again. Home opens.
-5. Revoke Microphone in System Settings and relaunch: setup shows only the Microphone step and "You're set". Allow it: the step shows a green check and moves on by itself.
-
-- [ ] **Step 6: Commit**
-
-```bash
-cd /Users/abhishekananad/Documents/Chirp && git add -A App && git commit -m "Replace setup with a stepped first run"
+git add -A App && git commit -m "Rewrite setup as one step per page"
 ```
 
 ---
 
-### Task 10: Final check and screenshots
+### Task 9: Polish, screenshots, docs (spec § 11)
 
 **Files:**
-- Create: `docs/design/screens/` with PNG files
-- Modify: none in code unless a check fails
+- Create: `docs/design/screens/` with PNGs
+- Modify: `docs/specs/2026-10-17-saywise-ui-design.md` (Status line → "built"), `docs/design/saywise-ui.md` (add "Replaced by …" at the top, or delete it)
 
-- [ ] **Step 1: Full build and tests**
+- [ ] **Step 1: Dark mode pass**
 
-Run BUILD and TEST. Expected: build succeeded, all tests pass.
+Switch the system to dark (System Settings > Appearance). Open Home, History, Settings. Fix anything that is unreadable: the `.quaternary` boxes in History, the stat numbers, the sidebar status row. The bar must look the same in both modes.
 
-- [ ] **Step 2: Walk the "done means" list from the spec**
+- [ ] **Step 2: Three recording paths**
 
-Run RUN and check each line of spec § 11:
+Hotkey, bar click, Home button. For each, the bar goes Listening → Finishing → Pasted (or Copied). Home's "Words today" grows after each.
 
-1. Home, History, Dictionary, Snippets, App styles and Settings open from the sidebar and from the menu bar.
-2. A hotkey recording, a bar click recording and a Home button recording show the bar states in order: Listening, Finishing, then Pasted (green check) or Copied.
-3. Home's "Words today" equals a hand count of the words in today's History rows.
-4. Switch macOS to dark mode (System Settings > Appearance) and look at Home, History, Settings and the bar. Switch back.
+- [ ] **Step 3: Screenshots**
 
-- [ ] **Step 3: Save screenshots**
+Use `screencapture -l <windowID>` or `screencapture -i` to save: `home-light.png`, `home-dark.png`, `history.png`, `settings.png`, `bar-idle.png`, `bar-listening.png`, `bar-copied.png`, `setup-welcome.png` under `docs/design/screens/`.
 
-Create the folder and capture the main window and the bar. The script finds the window by owner name with `CGWindowListCopyWindowInfo` and captures it with `screencapture -l`.
+- [ ] **Step 4: Tests and build**
 
 ```bash
-mkdir -p /Users/abhishekananad/Documents/Chirp/docs/design/screens
-cat > /tmp/winid.swift <<'EOF'
-import CoreGraphics
-import Foundation
-let owner = CommandLine.arguments[1]
-let minWidth = Double(CommandLine.arguments[2]) ?? 0
-let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as! [[String: Any]]
-for w in list {
-    guard w[kCGWindowOwnerName as String] as? String == owner,
-          let bounds = w[kCGWindowBounds as String] as? [String: Double],
-          (bounds["Width"] ?? 0) >= minWidth,
-          let id = w[kCGWindowNumber as String] as? Int else { continue }
-    print(id); break
-}
-EOF
-cd /Users/abhishekananad/Documents/Chirp/docs/design/screens
-# main window (width >= 800); switch pages by hand between captures, or via the menu bar
-screencapture -o -l "$(swift /tmp/winid.swift Saywise 800)" home.png
+cd Packages/ChirpCore && swift test 2>&1 | tail -3
 ```
+Expected: all pass. Then the xcodebuild command: `BUILD SUCCEEDED`, no warnings from files under `App/`.
 
-Repeat with the History page open as `history.png`, Settings as `settings.png`, then capture the bar (width under 400) idle as `bar-idle.png`, while holding Fn as `bar-listening.png` (run the capture command in a second terminal while holding the key), and the first setup step as `setup-1.png`:
-
-```bash
-screencapture -o -l "$(swift /tmp/winid.swift Saywise 0)" bar-idle.png
-```
-
-If `swift /tmp/winid.swift` is slow, that is the compiler; it is fine.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/abhishekananad/Documents/Chirp && git add docs/design/screens && git commit -m "Add screenshots of the new UI"
+git add -A docs && git commit -m "Add UI screenshots and mark the design as built"
 ```
 
 ---
 
-## Self-review against the spec
+## Self-review notes
 
-| Spec section | Task |
-|---|---|
-| § 3 look (window size, sidebar, cards, type, color, motion) | 3, 5, 6 |
-| § 4.1 header, § 4.2 banner, § 4.3 Talk card, § 4.4 stats, § 4.5 activity, § 4.6 half cards, § 4.7 states | 6 (states through `statusText`/`statusColor` in 4) |
-| § 5.1 History | 7 |
-| § 5.2 list pages | 8 |
-| § 5.3 Settings | 8 |
-| § 5.4 menu | 5 |
-| § 6 floating bar (shape, states, motion, WaveView) | 3, 4 |
-| § 7 first run | 9 |
-| § 8 HistoryStats | 1, 2 |
-| § 9 code map | all |
-| § 10 build notes | 4 (fixed-size panel, decision 1), 6 (chart hover, count-up, app icons) |
-| § 11 done means | 10 |
-
-Known gaps, accepted on purpose:
-
-- The spec's "Loading" row in § 4.7 mentions a progress bar in the Talk card. It is there (Task 6, `TalkCard.middle`).
-- The bar's "Copied" message for a Home recording reads "Copied · ⌘V to paste", the same as for a paste that found no text field. Both mean the same thing to the user.
+- Spec coverage: § 3 (Task 4), § 4 (Task 5), § 5.1 (Task 6), § 5.2 and § 5.3 (Task 7), § 5.4 (Task 4), § 6 (Task 3), § 7 (Task 8), § 8 (Task 1), § 9 code map (all), § 10 checks (Tasks 3, 5, 9), § 11 (Task 9).
+- The `.floatingButton` case name in `RecordingSource` is kept; it now means "the bar". Renaming it is not needed.
+- `windowText` stays on the controller and holds the last Home dictation; Home reads `recent.first` from history instead, so `windowText` can be removed if nothing else uses it after Task 5. Remove it in Task 5 if unused.
