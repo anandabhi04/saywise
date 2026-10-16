@@ -6,8 +6,13 @@ struct Sidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List(Page.allCases, selection: $page) { page in
-                Label(page.title, systemImage: page.symbol).tag(page)
+            List(selection: Binding<Page?>(
+                get: { page },
+                set: { if let selection = $0 { page = selection } }
+            )) {
+                ForEach(Page.allCases) { page in
+                    Label(page.title, systemImage: page.symbol).tag(page)
+                }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)

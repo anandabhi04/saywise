@@ -30,8 +30,6 @@ final class AppController {
     /// Bumped after each saved dictation so the History window reloads.
     private(set) var historyRevision = 0
     private(set) var recordingSource: RecordingSource?
-    /// The text box in the main window. Window recordings are added here.
-    var windowText = ""
     var settingsError: String?
     var settings: ChirpSettings {
         didSet { settingsChanged(from: oldValue) }
@@ -303,7 +301,6 @@ final class AppController {
             bar.flash(.message("Could not hear you", isError: true), for: 3)
         case let .delivered(result):
             if source == .window {
-                windowText = result.finalText
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(result.finalText, forType: .string)
                 bar.flash(.copied, for: 3)

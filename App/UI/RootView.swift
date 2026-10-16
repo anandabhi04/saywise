@@ -34,10 +34,11 @@ struct RootView: View {
         NavigationSplitView {
             Sidebar(controller: controller, page: $state.page)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             ZStack {
                 switch state.page {
-                case .home: Text("Home").font(.largeTitle)
+                case .home: HomeView(controller: controller, state: state)
                 case .history: HistoryView(controller: controller)
                 case .dictionary: PageColumn(title: "Dictionary") { DictionaryTab(controller: controller) }
                 case .snippets: PageColumn(title: "Snippets") { SnippetsTab(controller: controller) }
@@ -51,7 +52,6 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationSplitViewStyle(.balanced)
-        .toolbar(removing: .sidebarToggle)
         .frame(minWidth: 820, minHeight: 560)
     }
 }

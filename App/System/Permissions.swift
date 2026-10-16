@@ -43,6 +43,10 @@ enum Permission: String, CaseIterable, Identifiable {
         }
     }
 
+    func openSettingsIfCannotAsk() {
+        if self != .microphone { openSettings() }
+    }
+
     func openSettings() {
         let anchor = switch self {
         case .microphone: "Privacy_Microphone"
