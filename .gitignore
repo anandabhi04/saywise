@@ -8,3 +8,4 @@ Local.xcconfig
 TestClips/*.wav
 .superpowers/
 .nebula/
+.worktrees/
