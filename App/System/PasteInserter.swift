@@ -21,10 +21,12 @@ struct PasteInserter: TextInserter {
         copy(text, to: pasteboard)
         let ourChange = pasteboard.changeCount
         pressCommandV()
-        // The target app reads the clipboard after it handles Cmd+V, so wait before restoring.
-        try? await Task.sleep(for: .milliseconds(300))
-        // If the user copied something new meanwhile, keep theirs.
-        if pasteboard.changeCount == ourChange { saved.restore(to: pasteboard) }
+        Task { @MainActor in
+            // The target app reads the clipboard after it handles Cmd+V.
+            try? await Task.sleep(for: .milliseconds(300))
+            // If the user copied something new meanwhile, keep theirs.
+            if pasteboard.changeCount == ourChange { saved.restore(to: pasteboard) }
+        }
         return .pasted
     }
 
