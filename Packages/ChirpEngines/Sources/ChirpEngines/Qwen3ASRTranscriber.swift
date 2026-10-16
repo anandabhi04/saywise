@@ -19,18 +19,25 @@ public final class Qwen3ASRTranscriber: Transcriber, @unchecked Sendable {
         let folder = modelsDirectory
             .appendingPathComponent("qwen3-asr", isDirectory: true)
             .appendingPathComponent(modelID.replacingOccurrences(of: "/", with: "_"), isDirectory: true)
-        // Once the weights are on disk, offline mode skips the Hub round trip that every launch would make.
+        // Once the download is marked complete, offline mode skips the Hub round trip that every launch would make.
+        let offline = isDownloaded(folder)
         let model = try await Qwen3ASRModel.fromPretrained(
-            modelId: modelID, cacheDir: folder, offlineMode: isDownloaded(folder),
+            modelId: modelID, cacheDir: folder, offlineMode: offline,
             progressHandler: { fraction, _ in progress(fraction) })
+        if !offline {
+            FileManager.default.createFile(atPath: folder.appendingPathComponent(completeMarker).path, contents: Data())
+        }
         return Qwen3ASRTranscriber(model: model)
     }
 
-    /// Mirrors what fromPretrained fetches: config, tokenizer files, and every weight shard.
+    static let completeMarker = ".chirp-complete"
+
+    /// Files arrive in random order, so the marker (written after fromPretrained succeeds) decides.
+    /// The file checks only add to it: config, tokenizer files, and every weight shard.
     static func isDownloaded(_ folder: URL) -> Bool {
         let fm = FileManager.default
         func has(_ name: String) -> Bool { fm.fileExists(atPath: folder.appendingPathComponent(name).path) }
-        guard ["config.json", "vocab.json", "merges.txt", "tokenizer_config.json"].allSatisfy(has),
+        guard [completeMarker, "config.json", "vocab.json", "merges.txt", "tokenizer_config.json"].allSatisfy(has),
               let files = try? fm.contentsOfDirectory(atPath: folder.path),
               files.contains(where: { $0.hasSuffix(".safetensors") })
         else { return false }

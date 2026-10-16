@@ -24,6 +24,8 @@ public actor WhisperKitTranscriber: Transcriber {
             folder = try await WhisperKit.download(
                 variant: modelName, downloadBase: base,
                 progressCallback: { progress($0.fractionCompleted) })
+            // Written only after download returns, so an interrupted download is never trusted.
+            FileManager.default.createFile(atPath: folder.appendingPathComponent(completeMarker).path, contents: Data())
         }
         // tokenizerFolder keeps the tokenizer under Chirp's folder: saved on the first load, found there after.
         let config = WhisperKitConfig(
@@ -33,12 +35,14 @@ public actor WhisperKitTranscriber: Transcriber {
     }
 
     /// The folder WhisperKit.download fills: <base>/models/argmaxinc/whisperkit-coreml/openai_whisper-<variant>.
-    /// Files are moved into place only when complete, so a Core ML bundle that has its coremldata.bin is whole.
+    static let completeMarker = ".chirp-complete"
+
     static func downloadedModelFolder(in base: URL) -> URL? {
         let folder = base
             .appendingPathComponent("models/argmaxinc/whisperkit-coreml", isDirectory: true)
             .appendingPathComponent("openai_whisper-\(modelName)", isDirectory: true)
-        let required = ["config.json", "MelSpectrogram.mlmodelc/coremldata.bin",
+        // Files arrive in random order, so file checks alone can pass on a half-finished download.
+        let required = [completeMarker, "config.json", "MelSpectrogram.mlmodelc/coremldata.bin",
                         "AudioEncoder.mlmodelc/coremldata.bin", "TextDecoder.mlmodelc/coremldata.bin"]
         let complete = required.allSatisfy {
             FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
