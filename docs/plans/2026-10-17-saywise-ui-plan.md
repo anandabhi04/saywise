@@ -24,7 +24,7 @@ cd Packages/ChirpCore && swift test 2>&1 | tail -5
 ```
 
 ```bash
-xcodegen generate && xcodebuild -project Chirp.xcodeproj -scheme Chirp -configuration Debug -derivedDataPath build/DerivedData build 2>&1 | grep -E "error:|warning:.*App/|BUILD" | head -40
+xcodegen generate && xcodebuild -project Chirp.xcodeproj -scheme Chirp -configuration Debug -derivedDataPath build/DerivedData -skipPackagePluginValidation -skipMacroValidation build 2>&1 | grep -E "error:|warning:.*App/|BUILD" | head -40
 ```
 
 - Launch for a visual check: `open build/DerivedData/Build/Products/Debug/Chirp.app`. Screenshots go in `docs/design/screens/` (create the folder in Task 9).
