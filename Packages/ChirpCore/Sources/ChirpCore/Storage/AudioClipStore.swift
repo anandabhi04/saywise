@@ -42,6 +42,13 @@ public struct AudioClipStore: Sendable {
         return name
     }
 
+    public func deleteAll() throws {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
+
     public func prune() throws {
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
             .filter { $0.hasSuffix(".wav") }

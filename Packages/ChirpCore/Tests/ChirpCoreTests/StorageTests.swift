@@ -76,4 +76,17 @@ struct StorageTests {
         #expect(abs(loaded.count - samples.count) < 50)
         #expect(SilenceFilter.hasSpeech(loaded))
     }
+
+    @Test func audioClipStoreDeletesAllClips() throws {
+        let store = AudioClipStore(directory: tempDir())
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        try store.deleteAll()
+        _ = try store.save(speechSamples)
+        _ = try store.save(speechSamples)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.directory.path).count == 2)
+        try store.deleteAll()
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.directory.path).isEmpty)
+        try store.deleteAll()
+    }
+
 }
