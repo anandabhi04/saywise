@@ -82,4 +82,13 @@ public final class HistoryStore: HistoryWriting, Sendable {
             return PurgeResult(deletedCount: deletedCount, audioFileNames: audioFileNames)
         }
     }
+
+    /// Rows for the dashboard: the last 60 days, enough for the 14 day chart, this week and the streak.
+    public func stats(now: Date = Date(), calendar: Calendar = .current) async throws -> HistoryStats {
+        let since = calendar.date(byAdding: .day, value: -60, to: calendar.startOfDay(for: now)) ?? now
+        let entries = try await db.read { db in
+            try HistoryEntry.filter(Column("createdAt") >= since).fetchAll(db)
+        }
+        return HistoryStats.compute(entries: entries, now: now, calendar: calendar)
+    }
 }
