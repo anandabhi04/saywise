@@ -39,7 +39,8 @@ final class HotkeyMonitor {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return
         }
-        let now = ProcessInfo.processInfo.systemUptime
+        // CGEvent timestamps are nanoseconds since startup, already converted from mach ticks.
+        let now = Double(event.timestamp) / 1_000_000_000
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         switch type {
         case .flagsChanged:
