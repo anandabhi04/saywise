@@ -1,0 +1,5 @@
+// Copy to Local.xcconfig (never committed) and put your Apple team id here.
+// List certificates:  security find-identity -v -p codesigning
+// Read the team id (the OU= value) of a valid one:
+//   security find-certificate -c "<certificate name>" -p | openssl x509 -noout -subject
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
