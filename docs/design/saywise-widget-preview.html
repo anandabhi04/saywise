@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saywise widget preview</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#ececec;color:#1d1d1f;font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;padding:32px 24px 80px}
+h1{font-size:20px;margin:0 auto 6px;max-width:1100px}
+p.lead{max-width:1100px;margin:0 auto 28px;color:rgba(60,60,67,.7)}
+h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:rgba(60,60,67,.6);max-width:1100px;margin:36px auto 6px}
+p.note{max-width:1100px;margin:0 auto 14px;color:rgba(60,60,67,.7)}
+.row{max-width:1100px;margin:0 auto;display:flex;gap:20px;flex-wrap:wrap}
+.screen{position:relative;width:250px;height:340px;border-radius:10px;overflow:hidden;
+  background:linear-gradient(160deg,#8aa6c8,#c9b6d8 60%,#e8c9b5);box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.screen .menubar{height:16px;background:rgba(255,255,255,.55)}
+.screen .app{position:absolute;left:18px;top:34px;right:46px;bottom:24px;background:rgba(255,255,255,.85);border-radius:8px}
+.screen .app::before{content:"";position:absolute;left:12px;right:12px;top:14px;height:8px;border-radius:4px;background:rgba(0,0,0,.08);box-shadow:0 18px 0 rgba(0,0,0,.06),0 36px 0 rgba(0,0,0,.06)}
+.cap{position:absolute;left:0;right:0;bottom:-26px;text-align:center;color:rgba(60,60,67,.75);font-size:12px}
+.cell{position:relative;margin-bottom:30px}
+
+/* the widget */
+.w{position:absolute;right:8px;display:flex;flex-direction:column;align-items:center;gap:8px;
+  background:rgba(20,20,22,.55);backdrop-filter:blur(14px);border:.5px solid rgba(255,255,255,.18);
+  color:#fff;border-radius:16px;padding:8px 0;width:32px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.a .w{top:50%;transform:translateY(-50%)}
+.b .w{top:22px;bottom:12px;justify-content:space-between;padding:10px 0}
+.btn{width:24px;height:24px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.14);font-size:11px}
+.btn.stop{background:#ff3b30}
+.btn.stop i{width:8px;height:8px;border-radius:2px;background:#fff;display:block}
+.btn.pause i{width:8px;height:9px;border-left:3px solid #fff;border-right:3px solid #fff;display:block}
+.btn.play i{width:0;height:0;border-left:8px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent;margin-left:2px;display:block}
+.dot{width:7px;height:7px;border-radius:50%;background:#ff3b30;animation:p 1s infinite}
+.dot.amber{background:#ff9500;animation:none}
+@keyframes p{50%{opacity:.3}}
+.wave{display:flex;flex-direction:column;align-items:center;gap:2px}
+.wave span{height:2.5px;border-radius:2px;background:#fff;display:block}
+.wave.dim span{opacity:.35}
+.b .wave{flex:1;justify-content:center;gap:3px}
+.mic{font-size:13px;opacity:.85}
+.time{font-size:9px;opacity:.7;font-variant-numeric:tabular-nums}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<h1>Floating widget: vertical, with Pause and Stop</h1>
+<p class="lead">The widget sits on the right edge of the screen, standing up. While you talk it shows two buttons: Pause and Stop. Pause keeps what you said so far. Press it again to go on from there. You can drag it to the left edge too.</p>
+
+<h2>Option A · small pill, middle of the edge</h2>
+<p class="note">Takes little space. Stays in the middle of the side. Grows only while you talk.</p>
+<div class="row a" id="rowA"></div>
+
+<h2>Option B · tall strip, full height of the edge</h2>
+<p class="note">Runs along the whole side of the screen. The wave fills the strip. Easier to hit, but always takes the full height.</p>
+<div class="row b" id="rowB"></div>
+
+<script>
+const wave=(n,dim)=>`<div class="wave${dim?' dim':''}">${Array.from({length:n},(_,i)=>`<span style="width:${4+Math.round(Math.abs(Math.sin(i*1.7))*12)}px"></span>`).join('')}</div>`;
+const states=n=>[
+ ["Waiting",`<div class="mic">🎙</div>`],
+ ["Listening",`<div class="dot"></div>${wave(n)}<div class="time">0:12</div><div class="btn pause"><i></i></div><div class="btn stop"><i></i></div>`],
+ ["Paused",`<div class="dot amber"></div>${wave(n,true)}<div class="time">0:12</div><div class="btn play"><i></i></div><div class="btn stop"><i></i></div>`],
+ ["Finishing",`<div class="spin"></div>`],
+];
+for(const [id,n] of [["rowA",9],["rowB",30]]){
+  document.getElementById(id).innerHTML=states(n).map(([cap,inner])=>
+   `<div class="cell"><div class="screen"><div class="menubar"></div><div class="app"></div><div class="w">${inner}</div></div><div class="cap">${cap}</div></div>`).join('');
+}
+</script>
+</body>
+</html>
