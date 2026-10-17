@@ -1,0 +1,26 @@
+T0 speed baseline
+Recorded: 2026-10-17T07:04:54.035718+00:00
+Host: Apple M4 Max, macOS 26.4.1
+Clips: scripts/make-speed-clips.sh (Samantha, requested rate 140 words/minute, 16 kHz mono PCM WAV)
+Build: xcodebuild -project Chirp.xcodeproj -scheme ChirpBench -configuration Release -derivedDataPath build/DerivedData -skipPackagePluginValidation -skipMacroValidation build
+Run: build/DerivedData/Build/Products/Release/ChirpBench --manifest TestClips/speed/manifest.json --engine whisper
+Settings: cleanup enabled; mlx-community/Qwen3-4B-Instruct-2507-4bit; other style; no dictionary entries or snippets.
+One run per clip, in manifest order, after model loading and cleanup warm-up.
+Timings cover processing after stop, not model loading or real-time recording.
+
+Loading whisper and mlx-community/Qwen3-4B-Instruct-2507-4bit…
+
+## Clips (whisper)
+
+| file | audio s | raw WER | final WER | cleanup | speech ms | cleanup ms | total ms | target | output |
+|---|---|---|---|---|---|---|---|---|---|
+| en-3s.wav | 3.0 | 0.0% | 0.0% | used | 863 | 324 | 1188 | SLOW (700) | Please send the updated notes before our next meeting. |
+| en-20s.wav | 18.2 | 0.0% | 1.9% | used | 809 | 692 | 1502 | ok | I reviewed the project this morning and wrote down a few changes for the next release.  Please update the welcome screen.   Check the search results.   Make sure the settings are saved when the app closes.  We can review everything together tomorrow afternoon and decide which changes are ready to share with the team. |
+| en-45s.wav | 42.2 | 0.0% | 16.9% | used | 1772 | 1224 | 2997 | ok | Before we start the next round of testing, I want to explain how the new recording flow should work.  Press the key to begin speaking, then release it when you've finished. The app should convert the recording into text.  Remove repeated words and preserve the original message's meaning.  If you switch to another window while it's working, the result should remain on the clipboard.  Try: - A short reminder. - A longer message to a colleague. - A paragraph with several sentences.  Note how long each example takes and whether any words are missing.  After that, compare the results with the previous version to see which changes helped and which parts still need attention. |
+| en-75s.wav | 71.0 | 12.3% | 12.3% | used | 2712 | 1807 | 4521 | SLOW (3000) | Today I would like to walk through the plan for our next product review.  We will begin with the welcome screen and check that a new user can understand what to do without reading a long set of instructions.  Then we will open the main window, search for a recent item, and confirm that the results stay in the expected order.  After that, we will test the recording feature with several different messages.  The first message should be a quick reminder about a meeting.  The final message should be long enough to include a few pauses, some punctuation, and a change of topic.  For every example, note the time between finishing the recording and seeing the completed text.  Check the words carefully, because a fast result is only useful when it preserves what the speaker meant.  If anything looks wrong, save the original recording and write a short explanation of what happened.  At the end of the review, we will compare our notes, choose the most important remaining issues, and agree on what needs to be ready before the release goes out to the wider team. |
+
+## Summary by group
+
+| group | clips | mean raw WER | mean final WER | fallbacks | p50 total ms | p90 total ms |
+|---|---|---|---|---|---|---|
+| english | 4 | 3.1% | 7.8% | 0 | 2997 | 4521 |
