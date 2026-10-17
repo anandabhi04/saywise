@@ -1,0 +1,80 @@
+T3 cleanup speed and time limit
+Recorded: 2026-10-17T07:22:07.985485+00:00
+Host: Apple M4 Max, macOS 26.4.1
+Clips: TestClips/speed/manifest.json (Samantha, 16 kHz mono PCM WAV).
+Model: mlx-community/Qwen3-4B-Instruct-2507-4bit; other style; no dictionary entries or snippets.
+MLXLMCommon: mlx-swift-lm 3.31.4, revision bd4b7434e6bdb588c7ef55706ff8904cb7fd4c57.
+
+Cleanup deadline: 2,000 ms + 30 ms per whitespace-separated transcript word, capped at 6,000 ms.
+One instruction-only KV cache per style, replaced when instructions (including dictionary) change.
+Generation gets a separate cache copy. No transcript or generated answer is retained.
+Unsupported instruction-only templates or mismatched token boundaries use the full prompt.
+
+## Controlled prefix comparison
+
+Temporary local bench harness, removed before commit. Same Release binary and loaded model;
+for each manifest's expected text, cleanup ran uncached, cached, cached, uncached.
+Uncached used the previous fresh ChatSession path. Cached used the T3 path.
+Warm-up ran first. No concurrent bench or build ran during these measurements.
+These measure cleanup only, using reference text rather than Whisper output.
+Two samples per mode and clip: evidence of local speed, not a latency distribution.
+
+| input clip | mean uncached ms | mean cached ms | saved ms | reduction |
+|---|---|---|---|---|
+| en-3s.wav | 351.5 | 110.0 | 241.5 | 68.7% |
+| en-20s.wav | 725.0 | 484.0 | 241.0 | 33.2% |
+| en-45s.wav | 1302.0 | 1091.5 | 210.5 | 16.2% |
+| en-75s.wav | 1954.0 | 1738.5 | 215.5 | 11.0% |
+
+Raw measurements:
+en-3s.wav uncached 352 ms output_chars=54
+en-3s.wav cached 110 ms output_chars=54
+en-3s.wav cached 110 ms output_chars=54
+en-3s.wav uncached 351 ms output_chars=54
+en-20s.wav uncached 727 ms output_chars=320
+en-20s.wav cached 485 ms output_chars=320
+en-20s.wav cached 483 ms output_chars=320
+en-20s.wav uncached 723 ms output_chars=320
+en-45s.wav uncached 1301 ms output_chars=731
+en-45s.wav cached 1090 ms output_chars=731
+en-45s.wav cached 1093 ms output_chars=731
+en-45s.wav uncached 1303 ms output_chars=731
+en-75s.wav uncached 1962 ms output_chars=1213
+en-75s.wav cached 1738 ms output_chars=1213
+en-75s.wav cached 1739 ms output_chars=1213
+en-75s.wav uncached 1946 ms output_chars=1213
+
+## Prefix correctness checks
+
+Temporary local harness: all six styles, with dictionary [] -> ["Saywise"] -> [].
+Each request used "please send the updated notes before our next meeting", with app Notes
+and window title Meeting notes. For each request, cached output exactly matched the fresh-session output. After an unrelated
+"purple giraffe" dictation, repeating the request still exactly matched. All 18 cases passed.
+Final core suite: swift test in Packages/ChirpCore passed 103 tests across 13 suites.
+Required Debug app build passed with the command from the plan.
+
+## Final end-to-end bench
+
+Build: xcodebuild -project Chirp.xcodeproj -scheme ChirpBench -configuration Release -derivedDataPath build/DerivedData -skipPackagePluginValidation -skipMacroValidation build
+Run: build/DerivedData/Build/Products/Release/ChirpBench --manifest TestClips/speed/manifest.json --engine whisper
+One run per clip, in manifest order, after model loading and cleanup warm-up.
+Final sources, with temporary measurement hooks removed. Timings exclude loading and warm-up.
+The original T0 figures are in bench-before.txt; T2 changed the instructions since that baseline.
+Overlapping exploratory runs were discarded.
+
+Loading whisper and mlx-community/Qwen3-4B-Instruct-2507-4bit…
+
+## Clips (whisper)
+
+| file | audio s | raw WER | final WER | cleanup | speech ms | cleanup ms | total ms | target | output |
+|---|---|---|---|---|---|---|---|---|---|
+| en-3s.wav | 3.0 | 0.0% | 0.0% | used | 463 | 124 | 588 | ok | Please send the updated notes before our next meeting. |
+| en-20s.wav | 18.2 | 0.0% | 1.9% | used | 821 | 503 | 1325 | ok | I reviewed the project this morning and wrote down a few changes for the next release.   Please update the welcome screen.   Check the search results.   Make sure the settings are saved when the app closes.   We can review everything together tomorrow afternoon and decide which changes are ready to share with the team. |
+| en-45s.wav | 42.2 | 0.0% | 14.5% | used | 1790 | 1085 | 2876 | ok | Before we start the next round of testing, I want to explain how the new recording flow should work.    Press the key to begin speaking, then release it when you've finished. The app should convert the recording into text.    Remove repeated words and preserve the original message's meaning. If you switch to another window while it's working, the result should remain on the clipboard.    Try:   - A short reminder.   - A longer message to a colleague.   - A paragraph with several sentences.    Note how long each example takes and whether any words are missing.    After that, compare the results with the previous version so we can see which changes helped and which parts still need attention. |
+| en-75s.wav | 71.0 | 12.3% | 12.3% | used | 2735 | 1694 | 4430 | SLOW (3000) | Today I would like to walk through the plan for our next product review.  We will begin with the welcome screen and check that a new user can understand what to do without reading a long set of instructions.  Then we will open the main window, search for a recent item, and confirm that the results stay in the expected order.  After that, we will test the recording feature with several different messages.  The first message should be a quick reminder about a meeting.  The final message should be long enough to include a few pauses, some punctuation, and a change of topic.  For every example, note the time between finishing the recording and seeing the completed text.  Check the words carefully, because a fast result is only useful when it preserves what the speaker meant.  If anything looks wrong, save the original recording and write a short explanation of what happened.  At the end of the review, we will compare our notes, choose the most important remaining issues, and agree on what needs to be ready before the release goes out to the wider team. |
+
+## Summary by group
+
+| group | clips | mean raw WER | mean final WER | fallbacks | p50 total ms | p90 total ms |
+|---|---|---|---|---|---|---|
+| english | 4 | 3.1% | 7.2% | 0 | 2876 | 4430 |

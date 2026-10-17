@@ -12,7 +12,7 @@ struct DictationPipelineTests {
         cleaner: FakeCleaner = FakeCleaner(reply: { _ in "Cleaned text here." }),
         inserter: RecordingInserter = RecordingInserter(),
         history: (any HistoryWriting)? = RecordingHistory(),
-        timeout: Duration = .seconds(2)
+        timeout: Duration? = nil
     ) -> DictationPipeline {
         DictationPipeline(
             transcriber: FakeTranscriber(text: transcript, error: transcribeError),
@@ -106,6 +106,24 @@ struct DictationPipelineTests {
             .run(DictationInput(samples: speechSamples, context: notes, settings: settings)))
         #expect(result?.cleanup == .skipped)
         #expect(result?.finalText == "um this stays exactly as spoken")
+    }
+
+    @Test(arguments: [(0, 2_000), (2, 2_060), (20, 2_600), (100, 5_000), (133, 5_990), (134, 6_000), (1_000, 6_000)])
+    func cleanupTimeLimitGrowsAndCaps(wordCount: Int, milliseconds: Int) {
+        let text = Array(repeating: "word", count: wordCount).joined(separator: " ")
+        #expect(DictationPipeline.cleanupTimeLimit(for: text) == .milliseconds(milliseconds))
+    }
+
+    @Test func cleanupTimeLimitCountsWhitespaceSeparatedWords() {
+        #expect(DictationPipeline.cleanupTimeLimit(for: "one  two\nthree\tfour") == .milliseconds(2_120))
+    }
+
+    @Test func longerCleanupCanFinishAfterTwoSeconds() async throws {
+        let text = "this is a longer transcript that needs more time to clean up without losing any of the original spoken words"
+        let cleaner = FakeCleaner(reply: { _ in text }, delay: .milliseconds(2_200))
+        let result = try #require(delivered(await pipeline(transcript: text, cleaner: cleaner)
+            .run(DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings()))))
+        #expect(result.cleanup == .used)
     }
 
     @Test func slowCleanupFallsBackToRawText() async {

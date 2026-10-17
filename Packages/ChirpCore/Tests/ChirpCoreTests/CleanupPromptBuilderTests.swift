@@ -46,6 +46,7 @@ struct CleanupPromptBuilderTests {
     @Test(arguments: Style.allCases)
     func eachStyleIncludesMisheardWordRuleAndExample(style: Style) {
         let r = CleanupPromptBuilder.build(text: "start a new stations", style: style, dictionaryWords: [])
+        #expect(r.style == style)
         #expect(r.instructions.contains("similar-sounding word the speaker meant"))
         #expect(r.instructions.contains("Never add new ideas"))
         #expect(r.instructions.contains("Input: start a new stations")

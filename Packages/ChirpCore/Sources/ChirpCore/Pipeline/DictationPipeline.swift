@@ -6,7 +6,7 @@ public struct DictationPipeline: Sendable {
     public var cleaner: any Cleaner
     public var inserter: any TextInserter
     public var history: (any HistoryWriting)?
-    public var cleanupTimeout: Duration
+    public var cleanupTimeout: Duration?
     public var now: @Sendable () -> Date
 
     public init(
@@ -14,7 +14,7 @@ public struct DictationPipeline: Sendable {
         cleaner: any Cleaner,
         inserter: any TextInserter,
         history: (any HistoryWriting)?,
-        cleanupTimeout: Duration = .seconds(2),
+        cleanupTimeout: Duration? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.transcriber = transcriber
@@ -82,6 +82,10 @@ public struct DictationPipeline: Sendable {
         return .delivered(result)
     }
 
+    static func cleanupTimeLimit(for text: String) -> Duration {
+        .milliseconds(2_000 + min(TextNormalizer.wordCount(text) * 30, 4_000))
+    }
+
     private func cleaned(
         _ fallback: String, style: Style, settings: ChirpSettings, context: AppContext
     ) async -> (String, CleanupStatus) {
@@ -94,7 +98,8 @@ public struct DictationPipeline: Sendable {
         }
         let output: String
         do {
-            output = try await Timeout.race(cleanupTimeout) { [cleaner] in try await cleaner.clean(request) }
+            let timeLimit = cleanupTimeout ?? Self.cleanupTimeLimit(for: fallback)
+            output = try await Timeout.race(timeLimit) { [cleaner] in try await cleaner.clean(request) }
         } catch is CleanupTimeout {
             return reject(.timeout)
         } catch {

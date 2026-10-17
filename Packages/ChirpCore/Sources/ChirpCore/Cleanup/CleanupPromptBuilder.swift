@@ -4,6 +4,7 @@ public struct CleanupRequest: Equatable, Sendable {
     public var instructions: String
     public var userMessage: String
     public var maxTokens: Int
+    public var style: Style = .other
 }
 
 public enum CleanupPromptBuilder {
@@ -23,7 +24,7 @@ public enum CleanupPromptBuilder {
         return CleanupRequest(
             instructions: instructions(style: style, dictionaryWords: dictionaryWords),
             userMessage: parts.joined(separator: "\n\n"),
-            maxTokens: maxTokens(for: text))
+            maxTokens: maxTokens(for: text), style: style)
     }
 
     /// Spec: 2 x input tokens + 50. About 3 characters per token is a safe guess
