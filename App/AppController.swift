@@ -170,6 +170,10 @@ final class AppController {
         bar.rest()
     }
 
+    var recordingDuration: TimeInterval {
+        HotkeyStateMachine.handsFreeLimit - listeningTime.remaining(at: ProcessInfo.processInfo.systemUptime)
+    }
+
     var isMicOn: Bool { status != .paused }
 
     func setMicOn(_ on: Bool) {

@@ -4,6 +4,8 @@ import SwiftUI
 /// Click toggles recording, drag moves the panel. AppKit handles the mouse so a drag never counts as a click.
 private final class FloatingBarHostView: NSView {
     let pauseButton = NSButton()
+    let stopButton = NSButton()
+    var pillFrame = NSRect.zero
     var onClick: () -> Void = {}
     var onMoved: (NSPoint) -> Void = { _ in }
     var onHover: (Bool) -> Void = { _ in }
@@ -15,8 +17,9 @@ private final class FloatingBarHostView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        guard bounds.contains(local) else { return nil }
+        guard pillFrame.contains(local) else { return nil }
         if !pauseButton.isHidden, pauseButton.frame.contains(local) { return pauseButton }
+        if !stopButton.isHidden, stopButton.frame.contains(local) { return stopButton }
         return self
     }
 
@@ -47,7 +50,9 @@ private final class FloatingBarHostView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if dragged, let frame = window?.frame { onMoved(NSPoint(x: frame.midX, y: frame.midY)) } else { onClick() }
+        if dragged, let window {
+            onMoved(window.convertPoint(toScreen: NSPoint(x: pillFrame.midX, y: pillFrame.midY)))
+        } else { onClick() }
         dragStart = nil; windowStart = nil
     }
 }
@@ -55,7 +60,7 @@ private final class FloatingBarHostView: NSView {
 /// Never takes focus, so the text still pastes into the app the user was typing in.
 private final class FloatingBarPanel: NSPanel {
     init(content: NSView) {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 52, height: 34),
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 32, height: 32),
                    styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
         isFloatingPanel = true
         hidesOnDeactivate = false
@@ -78,6 +83,7 @@ final class FloatingBarController: NSObject {
     let model = BarModel()
     private let panel: FloatingBarPanel
     private let hosting: NSHostingView<FloatingBarView>
+    private let messageHosting: NSHostingView<FloatingBarMessageView>
     private let glass = NSVisualEffectView()
     private let host: FloatingBarHostView
     private weak var controller: AppController?
@@ -86,42 +92,58 @@ final class FloatingBarController: NSObject {
 
     init(controller: AppController) {
         self.controller = controller
-        host = FloatingBarHostView(frame: NSRect(x: 0, y: 0, width: 52, height: 34))
+        host = FloatingBarHostView(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
         glass.material = .hudWindow
         glass.blendingMode = .behindWindow
         glass.state = .active
         glass.wantsLayer = true
-        glass.layer?.cornerRadius = 17
+        glass.layer?.cornerRadius = 16
         glass.layer?.masksToBounds = true
         glass.frame = host.bounds
-        glass.autoresizingMask = [.width, .height]
         host.addSubview(glass)
-        hosting = NSHostingView(rootView: FloatingBarView(model: model))
+        hosting = NSHostingView(rootView: FloatingBarView(model: model, recordingDuration: { [weak controller] in controller?.recordingDuration ?? 0 }))
         hosting.frame = host.bounds
-        hosting.autoresizingMask = [.width, .height]
         hosting.layer?.backgroundColor = .clear
         host.addSubview(hosting)
-        host.pauseButton.isBordered = false
-        host.pauseButton.title = ""
-        host.pauseButton.imagePosition = .imageOnly
-        host.pauseButton.focusRingType = .none
-        host.pauseButton.contentTintColor = .white
+        messageHosting = NSHostingView(rootView: FloatingBarMessageView(model: model))
+        messageHosting.isHidden = true
+        host.addSubview(messageHosting)
+        for button in [host.pauseButton, host.stopButton] {
+            button.isBordered = false
+            button.title = ""
+            button.imagePosition = .imageOnly
+            button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+            button.focusRingType = .none
+            button.contentTintColor = .white
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 12
+            button.isHidden = true
+            host.addSubview(button)
+        }
+        host.pauseButton.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.14).cgColor
         host.pauseButton.action = #selector(toggleRecordingPause)
-        host.pauseButton.isHidden = true
-        host.addSubview(host.pauseButton)
+        host.stopButton.layer?.backgroundColor = NSColor.systemRed.cgColor
+        host.stopButton.image = NSImage(systemSymbolName: "stop.fill", accessibilityDescription: "Stop recording")
+        host.stopButton.toolTip = "Stop recording"
+        host.stopButton.setAccessibilityLabel("Stop recording")
+        host.stopButton.action = #selector(stopRecording)
         panel = FloatingBarPanel(content: host)
         super.init()
         host.pauseButton.target = self
+        host.stopButton.target = self
         host.onClick = { [weak self] in self?.clicked() }
         host.onHover = { [weak self] in self?.model.hovering = $0 }
         host.onMoved = { [weak self] center in
-            UserDefaults.standard.set(NSStringFromPoint(center), forKey: Self.centerKey)
-            self?.layout()
+            self?.layout(center: center)
         }
     }
 
     @objc private func toggleRecordingPause() {
         controller?.toggleRecordingPause()
+    }
+
+    @objc private func stopRecording() {
+        controller?.toggleRecording(from: .floatingButton)
     }
 
     func setVisible(_ visible: Bool) {
@@ -182,25 +204,54 @@ final class FloatingBarController: NSObject {
         }
     }
 
-    /// Resize around the saved center, kept 12 pt inside the screen. The frame is set without
-    /// animation; SwiftUI animates the content.
-    private func layout() {
+    private func layout(center draggedCenter: NSPoint? = nil) {
         hosting.layoutSubtreeIfNeeded()
         let size = hosting.fittingSize
-        let center = savedCenter() ?? defaultCenter()
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }) ?? NSScreen.main else { return }
-        let bounds = screen.visibleFrame.insetBy(dx: 12, dy: 12)
-        var origin = NSPoint(x: center.x - size.width / 2, y: center.y - size.height / 2)
-        origin.x = min(max(origin.x, bounds.minX), bounds.maxX - size.width)
-        origin.y = min(max(origin.y, bounds.minY), bounds.maxY - size.height)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: false)
+        let center = draggedCenter ?? savedCenter() ?? defaultCenter()
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(center) })
+                ?? NSScreen.screens.min(by: { distance(from: center, to: $0.frame) < distance(from: center, to: $1.frame) }) else { return }
+        let bounds = screen.visibleFrame.insetBy(dx: 8, dy: 8)
+        let onLeft = center.x < bounds.midX
+        let pillX = onLeft ? bounds.minX : bounds.maxX - size.width
+        let pillY = min(max(center.y - size.height / 2, bounds.minY), bounds.maxY - size.height)
+        let hasMessage: Bool
+        switch model.phase { case .copied, .message: hasMessage = true; default: hasMessage = false }
+        messageHosting.isHidden = !hasMessage
+        messageHosting.frame.size = NSSize(width: 240, height: 32)
+        messageHosting.layoutSubtreeIfNeeded()
+        let fittingMessageSize = hasMessage ? messageHosting.fittingSize : .zero
+        let messageSize = NSSize(width: ceil(fittingMessageSize.width), height: ceil(fittingMessageSize.height))
+        let messageWidth = hasMessage ? messageSize.width + 8 : 0
+        let height = max(size.height, messageSize.height)
+        let origin = NSPoint(x: pillX - (onLeft ? 0 : messageWidth),
+                             y: floor(min(max(pillY - (height - size.height) / 2, bounds.minY), bounds.maxY - height)))
+        panel.setFrame(NSRect(origin: origin, size: NSSize(width: size.width + messageWidth, height: height)), display: true, animate: false)
+        let pillFrame = NSRect(x: onLeft ? 0 : messageWidth, y: pillY - origin.y, width: size.width, height: size.height)
+        host.pillFrame = pillFrame
+        glass.frame = pillFrame
+        hosting.frame = pillFrame
+        messageHosting.frame = NSRect(x: onLeft ? size.width + 8 : 0, y: (height - messageSize.height) / 2,
+                                      width: messageSize.width, height: messageSize.height)
         let paused = model.phase == .recordingPaused
         let listening: Bool
         if case .listening = model.phase { listening = true } else { listening = false }
         host.pauseButton.isHidden = !paused && !listening
-        host.pauseButton.image = NSImage(systemSymbolName: paused ? "play.fill" : "pause.fill", accessibilityDescription: paused ? "Resume recording" : "Pause recording")
-        host.pauseButton.toolTip = paused ? "Resume recording" : "Pause recording"
-        host.pauseButton.frame = NSRect(x: size.width - 38, y: 5, width: 24, height: 24)
+        host.stopButton.isHidden = !paused && !listening
+        let pauseLabel = paused ? "Resume recording" : "Pause recording"
+        host.pauseButton.image = NSImage(systemSymbolName: paused ? "play.fill" : "pause.fill", accessibilityDescription: pauseLabel)
+        host.pauseButton.toolTip = pauseLabel
+        host.pauseButton.setAccessibilityLabel(pauseLabel)
+        host.pauseButton.frame = NSRect(x: pillFrame.minX + 4, y: pillFrame.minY + 40, width: 24, height: 24)
+        host.stopButton.frame = NSRect(x: pillFrame.minX + 4, y: pillFrame.minY + 8, width: 24, height: 24)
+        if draggedCenter != nil {
+            let snappedCenter = NSPoint(x: pillX + size.width / 2, y: pillY + size.height / 2)
+            UserDefaults.standard.set(NSStringFromPoint(snappedCenter), forKey: Self.centerKey)
+        }
+    }
+
+    private func distance(from point: NSPoint, to frame: NSRect) -> CGFloat {
+        hypot(max(frame.minX - point.x, 0, point.x - frame.maxX),
+              max(frame.minY - point.y, 0, point.y - frame.maxY))
     }
 
     private func savedCenter() -> NSPoint? {
@@ -211,6 +262,6 @@ final class FloatingBarController: NSObject {
 
     private func defaultCenter() -> NSPoint {
         let frame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
-        return NSPoint(x: frame.midX, y: frame.minY + 20 + 17)
+        return NSPoint(x: frame.maxX - 8 - 16, y: frame.midY)
     }
 }
