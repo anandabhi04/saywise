@@ -25,6 +25,25 @@ struct DictationPipelineTests {
         return nil
     }
 
+    @Test func joinedRawTextSkipsTranscriptionAndStillRunsCleanupAndHistory() async throws {
+        let history = RecordingHistory()
+        let cleaner = FakeCleaner(reply: { request in
+            #expect(request.userMessage.contains("first chunk second chunk"))
+            return "First chunk second chunk."
+        })
+        var input = DictationInput(samples: speechSamples, context: notes, settings: ChirpSettings(),
+            rawText: "first chunk second chunk")
+        input.remainingTranscribeMs = 123
+        let outcome = await pipeline(transcript: "", transcribeError: TestError(), cleaner: cleaner, history: history)
+            .run(input)
+        let result = try #require(delivered(outcome))
+        #expect(result.rawText == "first chunk second chunk")
+        #expect(result.timings.transcribeMs >= 123)
+        #expect(result.timings.totalMs >= result.timings.transcribeMs)
+        #expect(result.cleanup == .used)
+        #expect(history.entries.withLock { $0.first?.rawText } == result.rawText)
+    }
+
     @Test func silenceProducesNoSpeechAndNoPaste() async {
         let inserter = RecordingInserter()
         let p = pipeline(transcript: "hello", inserter: inserter)

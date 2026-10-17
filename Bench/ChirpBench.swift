@@ -3,7 +3,7 @@ import ChirpEngines
 import Foundation
 
 /// Runs every clip in a manifest through the real pipeline and prints accuracy and speed.
-/// Usage: ChirpBench --manifest TestClips/manifest.json [--engine whisper|qwen3ASR] [--no-cleanup]
+/// Usage: ChirpBench --manifest TestClips/manifest.json [--engine whisper|qwen3ASR] [--no-cleanup] [--real-time]
 @main
 enum ChirpBench {
     struct Manifest: Decodable {
@@ -43,10 +43,11 @@ enum ChirpBench {
         }
     }
 
+    @MainActor
     static func run() async throws {
         let args = CommandLine.arguments
         guard let manifestPath = value(after: "--manifest", in: args) else {
-            print("Usage: ChirpBench --manifest <path> [--engine whisper|qwen3ASR] [--no-cleanup]")
+            print("Usage: ChirpBench --manifest <path> [--engine whisper|qwen3ASR] [--no-cleanup] [--real-time]")
             exit(2)
         }
         let engineName = value(after: "--engine", in: args) ?? "whisper"
@@ -56,6 +57,7 @@ enum ChirpBench {
             exit(2)
         }
         let skipCleanup = args.contains("--no-cleanup")
+        let realTime = args.contains("--real-time")
         let manifestURL = URL(fileURLWithPath: manifestPath)
         let manifest = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifestURL))
 
@@ -84,8 +86,28 @@ enum ChirpBench {
             var clipSettings = settings
             clipSettings.languageMode = clip.language
             if skipCleanup { clipSettings.appStyles[bundleID] = .raw }
-            let outcome = await pipeline.run(DictationInput(
-                samples: samples, context: AppContext(bundleID: bundleID), settings: clipSettings))
+            var input = DictationInput(
+                samples: samples, context: AppContext(bundleID: bundleID), settings: clipSettings)
+            if realTime {
+                let recording = RecordingTranscription(
+                    transcriber: transcriber, language: clipSettings.languageMode,
+                    hints: WhisperHints.words(from: clipSettings.dictionary))
+                let clock = ContinuousClock()
+                let start = clock.now
+                let bufferSize = SilenceFilter.sampleRate / 10
+                for offset in stride(from: 0, to: samples.count, by: bufferSize) {
+                    let end = min(offset + bufferSize, samples.count)
+                    try await clock.sleep(until: start + .seconds(Double(end) / Double(SilenceFilter.sampleRate)))
+                    recording.append(Array(samples[offset..<end]))
+                }
+                let stopped = clock.now
+                input.rawText = try await recording.finish()
+                let elapsed = clock.now - stopped
+                input.remainingTranscribeMs = Int(elapsed.components.seconds * 1_000
+                    + elapsed.components.attoseconds / 1_000_000_000_000_000)
+                print("\(clip.file): real-time feed, \(recording.chunkCount) background chunks; timings below start at stop")
+            }
+            let outcome = await pipeline.run(input)
             guard case let .delivered(result) = outcome else {
                 print("\(clip.file): \(outcome)")
                 continue

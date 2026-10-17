@@ -39,13 +39,17 @@ public struct DictationPipeline: Sendable {
         let raw: String
         let transcribeStart = clock.now
         do {
-            raw = try await transcriber.transcribe(
-                input.samples, language: settings.languageMode,
-                hints: WhisperHints.words(from: settings.dictionary))
+            if let rawText = input.rawText {
+                raw = rawText
+            } else {
+                raw = try await transcriber.transcribe(
+                    input.samples, language: settings.languageMode,
+                    hints: WhisperHints.words(from: settings.dictionary))
+            }
         } catch {
             return .transcriptionFailed(String(describing: error))
         }
-        timings.transcribeMs = (clock.now - transcribeStart).milliseconds
+        timings.transcribeMs = input.remainingTranscribeMs + (clock.now - transcribeStart).milliseconds
         if HallucinationFilter.isLikely(raw, speechSeconds: speechSeconds) { return .noSpeech }
 
         let fixedRaw = DictionaryFixer.apply(settings.dictionary, to: raw)
@@ -69,7 +73,7 @@ public struct DictationPipeline: Sendable {
         let insertStart = clock.now
         let insert = await inserter.insert(text)
         timings.insertMs = (clock.now - insertStart).milliseconds
-        timings.totalMs = (clock.now - started).milliseconds
+        timings.totalMs = input.remainingTranscribeMs + (clock.now - started).milliseconds
 
         let result = DictationResult(
             rawText: raw, finalText: text, style: style, cleanup: cleanup, insert: insert,

@@ -31,12 +31,15 @@ public struct DictationInput: Sendable {
     public var context: AppContext
     public var settings: ChirpSettings
     public var audioFileName: String?
+    public var rawText: String?
+    public var remainingTranscribeMs = 0
 
-    public init(samples: [Float], context: AppContext, settings: ChirpSettings, audioFileName: String? = nil) {
+    public init(samples: [Float], context: AppContext, settings: ChirpSettings, audioFileName: String? = nil, rawText: String? = nil) {
         self.samples = samples
         self.context = context
         self.settings = settings
         self.audioFileName = audioFileName
+        self.rawText = rawText
     }
 }
 

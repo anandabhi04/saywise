@@ -9,6 +9,8 @@ enum RecorderError: Error {
 final class AudioRecorder {
     /// Called on the main thread with the RMS level of each buffer.
     var onLevel: ((Float) -> Void)?
+    var onSamples: (([Float]) -> Void)?
+    private var recordingID = UUID()
 
     private let engine = AVAudioEngine()
     private let lock = NSLock()
@@ -18,6 +20,8 @@ final class AudioRecorder {
         channels: 1, interleaved: false)!
 
     func start() throws {
+        recordingID = UUID()
+        let id = recordingID
         lock.withLock { samples.removeAll(keepingCapacity: true) }
         let input = engine.inputNode
         // Read the format each time: it changes when the user switches mics.
@@ -27,13 +31,14 @@ final class AudioRecorder {
         }
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.append(buffer, converter: converter)
+            self?.append(buffer, converter: converter, recordingID: id)
         }
         engine.prepare()
         try engine.start()
     }
 
     func stop() -> [Float] {
+        recordingID = UUID()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         return lock.withLock { samples }
@@ -43,7 +48,7 @@ final class AudioRecorder {
         _ = stop()
     }
 
-    private func append(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter) {
+    private func append(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter, recordingID: UUID) {
         let ratio = target.sampleRate / buffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
         guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
@@ -63,6 +68,11 @@ final class AudioRecorder {
         lock.withLock { samples.append(contentsOf: chunk) }
         let sum = chunk.reduce(Float(0)) { $0 + $1 * $1 }
         let rms = chunk.isEmpty ? 0 : (sum / Float(chunk.count)).squareRoot()
-        DispatchQueue.main.async { [weak self] in self?.onLevel?(rms) }
+        let copied = Array(chunk)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.recordingID == recordingID else { return }
+            self.onLevel?(rms)
+            self.onSamples?(copied)
+        }
     }
 }

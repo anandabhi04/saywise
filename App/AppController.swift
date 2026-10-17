@@ -54,6 +54,8 @@ final class AppController {
     @ObservationIgnored private var isLoadingModels = false
     @ObservationIgnored private var context = AppContext()
     @ObservationIgnored private var historyPurgeTimer: Task<Void, Never>?
+    @ObservationIgnored private var recordingTranscription: RecordingTranscription?
+    @ObservationIgnored private var recordingSettings: ChirpSettings?
     @ObservationIgnored private var handsFreeTimer: Task<Void, Never>?
 
     init() {
@@ -70,6 +72,7 @@ final class AppController {
         }
         history = try? HistoryStore(path: paths.historyDatabase.path)
         recorder.onLevel = { [weak self] level in self?.bar.model.push(level) }
+        recorder.onSamples = { [weak self] samples in self?.recordingTranscription?.append(samples) }
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
     }
 
@@ -241,6 +244,12 @@ final class AppController {
             bar.flash(.message("Microphone not available", isError: true), for: 3)
             return
         }
+        recordingSettings = settings
+        if let transcriber {
+            recordingTranscription = RecordingTranscription(
+                transcriber: transcriber, language: settings.languageMode,
+                hints: WhisperHints.words(from: settings.dictionary))
+        }
         status = .recording
         recordingSource = source
         lastHandsFree = isHandsFree
@@ -253,6 +262,14 @@ final class AppController {
         guard status == .recording, let transcriber, let cleaner else { return }
         handsFreeTimer?.cancel()
         let samples = recorder.stop()
+        let transcription = recordingTranscription
+        recordingTranscription = nil
+        // Audio callbacks queued on the main thread may not have arrived before stop.
+        if let transcription {
+            transcription.append(Array(samples.dropFirst(transcription.sampleCount)))
+        }
+        let settings = recordingSettings ?? settings
+        recordingSettings = nil
         let source = recordingSource ?? .hotkey
         // A click can stop a hotkey recording, so the key's next press must start fresh.
         machine = HotkeyStateMachine()
@@ -261,7 +278,7 @@ final class AppController {
         playSound("Pop")
         let audioFileName = settings.keepAudio && settings.historyRetention != .off
             ? try? clipStore.save(samples) : nil
-        let input = DictationInput(
+        var input = DictationInput(
             samples: samples, context: context, settings: settings,
             audioFileName: audioFileName)
         let pipeline = DictationPipeline(
@@ -269,7 +286,20 @@ final class AppController {
             inserter: source == .window ? KeepInWindowInserter() as any TextInserter : PasteInserter(),
             history: settings.historyRetention == .off ? nil : history)
         Task {
-            let outcome = await pipeline.run(input)
+            let outcome: DictationOutcome
+            do {
+                if let transcription {
+                    let clock = ContinuousClock()
+                    let stopped = clock.now
+                    input.rawText = try await transcription.finish()
+                    let elapsed = clock.now - stopped
+                    input.remainingTranscribeMs = Int(elapsed.components.seconds * 1_000
+                        + elapsed.components.attoseconds / 1_000_000_000_000_000)
+                }
+                outcome = await pipeline.run(input)
+            } catch {
+                outcome = .transcriptionFailed(String(describing: error))
+            }
             switch outcome {
             case .noSpeech:
                 if let audioFileName {
@@ -288,6 +318,9 @@ final class AppController {
         guard status == .recording else { return }
         handsFreeTimer?.cancel()
         recorder.cancel()
+        recordingTranscription?.cancel()
+        recordingTranscription = nil
+        recordingSettings = nil
         status = .ready
         recordingSource = nil
         bar.rest()

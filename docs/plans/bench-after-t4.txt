@@ -1,0 +1,50 @@
+T4 transcription while recording
+Recorded: 2026-10-17T07:34:21.546579+00:00
+Clips: TestClips/speed/manifest.json (16 kHz mono PCM WAV).
+Build: xcodebuild -project Chirp.xcodeproj -scheme ChirpBench -configuration Release -derivedDataPath build/DerivedData -skipPackagePluginValidation -skipMacroValidation build
+Run: build/DerivedData/Build/Products/Release/ChirpBench --manifest TestClips/speed/manifest.json --engine whisper --real-time
+
+Audio is fed in 100 ms buffers, paced by a continuous clock at the original sample rate.
+At least 15 s of untranscribed audio is needed. Boundaries use 10 ms RMS frames below
+0.01 for at least 300 ms, searching the newest 5 s. Only one chunk runs at a time.
+On stop, wait for the active chunk and transcribe only the remainder. Join with spaces.
+The existing engine retains its language, hints, and per-call Urdu-to-Hindi retry.
+Speech ms includes waiting and remainder transcription after stop. Total ms adds the
+normal pipeline work after that; transcription completed while recording is excluded.
+Model loading, warm-up, and recording duration are excluded from the table.
+One sample per clip; these are local latency observations, not a distribution.
+The 18.2 s clip has no qualifying gap after 15 s and uses whole-clip transcription.
+An earlier redirected run was interrupted after its output stayed buffered; only the
+completed live-output run below is reported. No concurrent build ran during this run.
+
+Required Debug app build passed. swift test in Packages/ChirpCore passed 112 tests
+across 14 suites. No microphone or app UI test was run.
+
+Loading whisper and mlx-community/Qwen3-4B-Instruct-2507-4bit…
+en-3s.wav: real-time feed, 0 background chunks; timings below start at stop
+en-20s.wav: real-time feed, 0 background chunks; timings below start at stop
+en-45s.wav: real-time feed, 1 background chunks; timings below start at stop
+en-75s.wav: real-time feed, 3 background chunks; timings below start at stop
+
+## Clips (whisper)
+
+| file | audio s | raw WER | final WER | cleanup | speech ms | cleanup ms | total ms | target | output |
+|---|---|---|---|---|---|---|---|---|---|
+| en-3s.wav | 3.0 | 0.0% | 0.0% | used | 463 | 131 | 594 | ok | Please send the updated notes before our next meeting. |
+| en-20s.wav | 18.2 | 0.0% | 1.9% | used | 829 | 554 | 1383 | ok | I reviewed the project this morning and wrote down a few changes for the next release.   Please update the welcome screen.   Check the search results.   Make sure the settings are saved when the app closes.   We can review everything together tomorrow afternoon and decide which changes are ready to share with the team. |
+| en-45s.wav | 42.2 | 0.0% | 14.5% | used | 819 | 1114 | 1933 | ok | Before we start the next round of testing, I want to explain how the new recording flow should work.    Press the key to begin speaking, then release it when you've finished. The app should convert the recording into text.    Remove repeated words and preserve the original message's meaning. If you switch to another window while it's working, the result should remain on the clipboard.    Try:   - A short reminder.   - A longer message to a colleague.   - A paragraph with several sentences.    Note how long each example takes and whether any words are missing.    After that, compare the results with the previous version so we can see which changes helped and which parts still need attention. |
+| en-75s.wav | 71.0 | 0.0% | 0.0% | used | 661 | 1759 | 2421 | ok | Today I would like to walk through the plan for our next product review.  We will begin with the welcome screen and check that a new user can understand what to do without reading a long set of instructions.  Then we will open the main window, search for a recent item, and confirm that the results stay in the expected order.  After that, we will test the recording feature with several different messages.  The first message should be a quick reminder about a meeting.  The second should describe a problem and suggest a practical next step.  The final message should be long enough to include a few pauses, some punctuation, and a change of topic.  For every example, note the time between finishing the recording and seeing the completed text.  Check the words carefully, because a fast result is only useful when it preserves what the speaker meant.  If anything looks wrong, save the original recording and write a short explanation of what happened.  We can use those examples to repeat the same checks after the next update.  At the end of the review, we will compare our notes, choose the most important remaining issues, and agree on what needs to be ready before the release goes out to the wider team. |
+
+## Summary by group
+
+| group | clips | mean raw WER | mean final WER | fallbacks | p50 total ms | p90 total ms |
+|---|---|---|---|---|---|---|
+| english | 4 | 0.0% | 4.1% | 0 | 1933 | 2421 |
+
+Comparison with the saved T3 end-to-end run (one sample in each run):
+- 3.0 s: 588 -> 594 ms after stop.
+- 18.2 s: 1325 -> 1383 ms after stop (no qualifying chunk boundary).
+- 42.2 s: 2876 -> 1933 ms after stop, 943 ms saved (32.8%).
+- 71.0 s: 4430 -> 2421 ms after stop, 2009 ms saved (45.3%).
+Raw WER on the 71.0 s clip: 12.3% -> 0.0%; final WER: 12.3% -> 0.0%.
+The comparison is against the prior saved run, not a simultaneous controlled A/B.
