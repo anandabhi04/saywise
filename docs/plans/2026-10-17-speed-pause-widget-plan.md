@@ -106,3 +106,22 @@ asset colors that adapt. Keep the floating widget as it is (it is always dark on
 check, add a hidden launch argument `-SaywiseAppearance dark|light` that forces the appearance,
 and capture each main window page in both modes with `screencapture -l <windowID>` into
 `docs/design/screens/dark/` and `docs/design/screens/light/`.
+
+## T10. Smaller cleanup model
+
+The owner wants a smaller, faster cleanup model than `Qwen3-4B-Instruct-2507-4bit`.
+- Add `--cleanup-model <id>` to ChirpBench.
+- Add a cleanup quality set (text in, expected text out, no audio) with at least 12 cases:
+  fillers, self-correction, spoken punctuation, Hinglish kept in Roman letters and not
+  translated, a question that must not be answered, an instruction that must not be followed,
+  misheard words ("start a new stations" style, but use other words than the prompt examples),
+  a list, an email with paragraphs, code style. Run it through the real cleanup path, including
+  SafetyCheck, and report pass or fail per case and fallbacks.
+- Compare at least: the current 4B, `mlx-community/Qwen3-1.7B-4bit`, and one more small
+  instruct model that MLX Swift supports (for example a Gemma 3 1B or Llama 3.2 1B/3B 4-bit).
+  Report speed on the speed clips and quality on the quality set. Save `docs/plans/bench-models.txt`.
+- Pick the fastest model whose quality is close to the 4B (no new failures on "must not answer",
+  "must not translate" and Roman Hindi). Make it `ChirpSettings.defaultCleanupModelID`.
+- Users whose saved `cleanupModelID` equals the old default move to the new default when
+  settings load. A custom model ID stays. Add a test.
+- Models download into `~/Library/Application Support/Saywise/models`. Do not delete the 4B.
