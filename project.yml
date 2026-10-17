@@ -45,6 +45,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.saywise.app
         PRODUCT_NAME: Saywise
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   ChirpBench:
     type: tool
     platform: macOS

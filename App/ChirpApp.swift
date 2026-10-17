@@ -19,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = AppController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        switch UserDefaults.standard.string(forKey: "SaywiseAppearance") {
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        default: break
+        }
         WindowCoordinator.shared.controller = controller
         controller.start()
         WindowCoordinator.shared.showMain()

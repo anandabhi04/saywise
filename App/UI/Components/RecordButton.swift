@@ -50,7 +50,7 @@ struct RecordButton: View {
     @ViewBuilder private var glyph: some View {
         switch state {
         case .working:
-            ProgressView().controlSize(.small).tint(.white)
+            ProgressView().controlSize(.small).tint(Color(nsColor: .windowBackgroundColor))
         case .disabled:
             Image(systemName: "mic.fill").font(.system(size: 24, weight: .semibold)).foregroundStyle(.tertiary)
         case .idle:
