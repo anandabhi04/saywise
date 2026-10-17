@@ -85,3 +85,24 @@ Design: `docs/design/saywise-widget-preview.html`, option A.
 ## T7. Final check
 
 Bench again, save `docs/plans/bench-final.txt`. Build and all tests pass.
+
+## T8. App icon: small bird
+
+Design: `docs/design/saywise-icon-preview.html`, idea 3 (small bird with two sound arcs).
+- Light: orange gradient plate (#ffb347 → #ff5e62), white bird, white arcs.
+- Dark: dark plate (#3a3a3e → #151517), bird #ffb347, arcs #ff7a59.
+- Save the master art as SVG in `docs/design/icon/`.
+- Ship it with both appearances. Prefer an Icon Composer `AppIcon.icon` if this Xcode builds it
+  for macOS; otherwise an `Assets.xcassets/AppIcon.appiconset` with all macOS sizes, rendered from
+  the SVG with a script kept in `scripts/`. Wire it in `project.yml`.
+- Check: the built `Saywise.app` shows the icon (`Contents/Resources` has the icon, and
+  `Info.plist` names it).
+
+## T9. Dark mode for every window
+
+Every Saywise window follows the Mac's light or dark setting. Find hard-coded colors in `App/UI`
+(white, black, fixed hex) that break in one of the two modes and replace them with system or
+asset colors that adapt. Keep the floating widget as it is (it is always dark on purpose). For a
+check, add a hidden launch argument `-SaywiseAppearance dark|light` that forces the appearance,
+and capture each main window page in both modes with `screencapture -l <windowID>` into
+`docs/design/screens/dark/` and `docs/design/screens/light/`.

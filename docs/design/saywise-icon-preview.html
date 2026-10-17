@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saywise icon ideas</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;-webkit-font-smoothing:antialiased;padding:32px 24px 80px;background:#ececec;color:#1d1d1f}
+h1{font-size:20px;margin:0 auto 6px;max-width:1100px}
+p.lead{max-width:1100px;margin:0 auto 26px;color:rgba(60,60,67,.7)}
+.grid{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
+.card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h3{margin:0 0 2px;font-size:15px}
+.card p{margin:0 0 14px;color:rgba(60,60,67,.7)}
+.pair{display:flex;gap:10px}
+.tile{flex:1;border-radius:10px;padding:16px 0 10px;display:flex;flex-direction:column;align-items:center;gap:8px;font-size:11px}
+.tile.l{background:#f2f2f4;color:rgba(60,60,67,.6)}
+.tile.d{background:#1c1c1e;color:rgba(235,235,245,.6)}
+.tile svg{width:104px;height:104px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.22))}
+.small{display:flex;gap:6px;align-items:end}
+.small svg{width:32px;height:32px;filter:none}
+.small svg.s16{width:16px;height:16px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;background:#e8f1ff;color:#0a60d0;margin-left:6px;vertical-align:2px}
+</style>
+</head>
+<body>
+<h1>Saywise app icon ideas</h1>
+<p class="lead">Each idea has a light and a dark version. macOS shows the dark one when the Mac is in dark mode. The small sizes show how it looks in the Dock and in Finder lists.</p>
+<div class="grid" id="grid"></div>
+
+<svg width="0" height="0" style="position:absolute">
+ <defs>
+  <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4aa3ff"/><stop offset="1" stop-color="#0a5fe0"/></linearGradient>
+  <linearGradient id="dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3a3e"/><stop offset="1" stop-color="#151517"/></linearGradient>
+  <linearGradient id="sun" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#ff5e62"/></linearGradient>
+  <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ee7c4"/><stop offset="1" stop-color="#1b9e8f"/></linearGradient>
+  <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9b8cff"/><stop offset="1" stop-color="#5b3fd6"/></linearGradient>
+  <linearGradient id="white" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9e9ee"/></linearGradient>
+ </defs>
+</svg>
+
+<script>
+// Squircle-ish macOS icon plate, 100x100 viewBox with 10px margin.
+const plate = fill => `<rect x="10" y="10" width="80" height="80" rx="18" fill="${fill}"/>`;
+const bars = (xs, hs, color, cy=50, w=5) => xs.map((x,i)=>`<rect x="${x-w/2}" y="${cy-hs[i]/2}" width="${w}" height="${hs[i]}" rx="${w/2}" fill="${color}"/>`).join('');
+
+const ideas = [
+ { name:"1 · Bubble with a wave", rec:true,
+   note:"A speech bubble holding a sound wave. Says 'speak, and it becomes a message'. Clear at small sizes.",
+   draw:(bg,glyph,accent)=>plate(bg)+`<path d="M30 30h40a8 8 0 0 1 8 8v20a8 8 0 0 1-8 8H48l-12 9v-9h-6a8 8 0 0 1-8-8V38a8 8 0 0 1 8-8z" fill="${glyph}"/>`+bars([37,44,51,58,65],[8,16,22,14,8],accent,48,4.5) },
+ { name:"2 · Wave becomes a text cursor",
+   note:"Sound bars on the left turn into a typing cursor on the right. Shows voice turning into text.",
+   draw:(bg,glyph,accent)=>plate(bg)+bars([28,36,44,52],[10,22,32,18],glyph,50,5)+`<rect x="63" y="28" width="5" height="44" rx="2.5" fill="${accent}"/><rect x="56" y="28" width="19" height="4" rx="2" fill="${accent}"/><rect x="56" y="68" width="19" height="4" rx="2" fill="${accent}"/>` },
+ { name:"3 · Small bird (a chirp)",
+   note:"A simple bird with two sound arcs. Friendly and easy to remember. Fits the project name 'Chirp'.",
+   draw:(bg,glyph,accent)=>plate(bg)+`<path d="M30 58c0-14 10-24 24-24 6 0 10 3 12 6l8 2-7 4c0 13-10 22-24 22-6 0-10-2-13-4z" fill="${glyph}"/><circle cx="58" cy="44" r="2.6" fill="${bg.startsWith('url')?'#0a5fe0':bg}"/><path d="M74 33a10 10 0 0 1 0 12M79 29a17 17 0 0 1 0 20" stroke="${accent}" stroke-width="3.5" fill="none" stroke-linecap="round"/>` },
+ { name:"4 · Quote marks made of sound",
+   note:"Two quote marks built from wave bars. Means 'what you said, written down'.",
+   draw:(bg,glyph,accent)=>plate(bg)+`<path d="M28 60c0-14 5-22 15-25l2 5c-5 2-7 6-7 10h7v14H28zM52 60c0-14 5-22 15-25l2 5c-5 2-7 6-7 10h7v14H52z" fill="${glyph}"/>`+bars([34,40,58,64],[6,10,10,6],accent,72,3.5) },
+ { name:"5 · Mic with a sparkle",
+   note:"A microphone with a small sparkle for the AI cleanup. Very clear meaning, but many apps use a mic.",
+   draw:(bg,glyph,accent)=>plate(bg)+`<rect x="42" y="24" width="16" height="32" rx="8" fill="${glyph}"/><path d="M34 48a16 16 0 0 0 32 0" stroke="${glyph}" stroke-width="4.5" fill="none" stroke-linecap="round"/><rect x="47.8" y="64" width="4.5" height="10" rx="2" fill="${glyph}"/><path d="M71 24l2.6 6.4L80 33l-6.4 2.6L71 42l-2.6-6.4L62 33l6.4-2.6z" fill="${accent}"/>` },
+];
+
+const themes = [
+ { bgL:"url(#blue)", gL:"#fff", aL:"#0a5fe0", bgD:"url(#dark)", gD:"#4aa3ff", aD:"#1c1c1e" },
+ { bgL:"url(#white)", gL:"#1d1d1f", aL:"#0a7aff", bgD:"url(#dark)", gD:"#f5f5f7", aD:"#4aa3ff" },
+ { bgL:"url(#sun)", gL:"#fff", aL:"#fff", bgD:"url(#dark)", gD:"#ffb347", aD:"#ff7a59" },
+ { bgL:"url(#violet)", gL:"#fff", aL:"#d9d2ff", bgD:"url(#dark)", gD:"#b3a8ff", aD:"#7d6bff" },
+ { bgL:"url(#mint)", gL:"#fff", aL:"#fff6b0", bgD:"url(#dark)", gD:"#5ee7c4", aD:"#ffe066" },
+];
+
+const svg = (inner, cls="") => `<svg class="${cls}" viewBox="0 0 100 100">${inner}</svg>`;
+document.getElementById('grid').innerHTML = ideas.map((idea,i)=>{
+  const t = themes[i];
+  const L = idea.draw(t.bgL,t.gL,t.aL), D = idea.draw(t.bgD,t.gD,t.aD);
+  return `<div class="card"><h3>${idea.name}${idea.rec?'<span class="tag">my pick</span>':''}</h3><p>${idea.note}</p>
+   <div class="pair">
+    <div class="tile l">${svg(L)}<div class="small">${svg(L)}${svg(L,'s16')}</div>Light</div>
+    <div class="tile d">${svg(D)}<div class="small">${svg(D)}${svg(D,'s16')}</div>Dark</div>
+   </div></div>`;
+}).join('');
+</script>
+</body>
+</html>
