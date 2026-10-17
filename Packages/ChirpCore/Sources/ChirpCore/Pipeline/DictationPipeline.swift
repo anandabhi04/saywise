@@ -57,11 +57,11 @@ public struct DictationPipeline: Sendable {
         if let snippet = SnippetEngine.wholeMatch(fallback, in: settings.snippets) {
             text = snippet.expansion
             cleanup = .snippet
-        } else if style == .raw || TextNormalizer.wordCount(fallback) <= 3 {
+        } else if style == .raw || TextNormalizer.wordCount(fallback) < 2 {
             text = SnippetEngine.expandInline(fallback, snippets: settings.snippets)
             cleanup = .skipped
         } else {
-            (text, cleanup) = await cleaned(fallback, style: style, settings: settings)
+            (text, cleanup) = await cleaned(fallback, style: style, settings: settings, context: input.context)
         }
         timings.cleanupMs = (clock.now - cleanupStart).milliseconds
         if cleanup != .snippet { text = StyleFinisher.finish(text, style: style) }
@@ -83,12 +83,12 @@ public struct DictationPipeline: Sendable {
     }
 
     private func cleaned(
-        _ fallback: String, style: Style, settings: ChirpSettings
+        _ fallback: String, style: Style, settings: ChirpSettings, context: AppContext
     ) async -> (String, CleanupStatus) {
         // The LLM gets Roman letters. Given Devanagari, it translated Hindi into English.
         let llmInput = SnippetEngine.protect(fallback, snippets: settings.snippets)
         let request = CleanupPromptBuilder.build(
-            text: llmInput.text, style: style, dictionaryWords: settings.dictionary.map(\.word))
+            text: llmInput.text, style: style, dictionaryWords: settings.dictionary.map(\.word), context: context)
         let reject = { (reason: CleanupRejection) in
             (SnippetEngine.expand(llmInput.text, using: llmInput.expansions), CleanupStatus.rejected(reason))
         }

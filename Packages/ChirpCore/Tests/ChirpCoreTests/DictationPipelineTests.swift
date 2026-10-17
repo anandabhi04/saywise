@@ -67,12 +67,35 @@ struct DictationPipelineTests {
         #expect(saved.first?.appBundleID == "com.apple.Notes")
     }
 
-    @Test func shortTextSkipsCleanup() async {
+    @Test func singleWordSkipsCleanup() async {
         let cleaner = FakeCleaner(reply: { _ in Issue.record("cleaner must not run"); return "" })
-        let result = delivered(await pipeline(transcript: "Sounds good.", cleaner: cleaner)
+        let result = delivered(await pipeline(transcript: "Great.", cleaner: cleaner)
             .run(DictationInput(samples: speechSamples, context: slack, settings: ChirpSettings())))
         #expect(result?.cleanup == .skipped)
-        #expect(result?.finalText == "Sounds good")
+        #expect(result?.finalText == "Great")
+    }
+
+    @Test(arguments: ["Sounds good.", "That sounds good."])
+    func twoOrThreeWordsUseCleanup(transcript: String) async throws {
+        let cleaner = FakeCleaner(reply: { _ in "Sounds good" })
+        let result = try #require(delivered(await pipeline(transcript: transcript, cleaner: cleaner)
+            .run(DictationInput(samples: speechSamples, context: slack, settings: ChirpSettings()))))
+        #expect(result.cleanup == .used)
+        #expect(result.finalText == "Sounds good")
+    }
+
+    @Test func cleanupGetsContextAndCorrectsMisheardWord() async throws {
+        let context = AppContext(bundleID: "com.apple.Notes", appName: "Notes", windowTitle: "Planning a session")
+        let cleaner = FakeCleaner(reply: { request in
+            #expect(request.userMessage.contains("App name: Notes"))
+            #expect(request.userMessage.contains("Window title: Planning a session"))
+            #expect(request.userMessage.hasSuffix("<transcript>\nstart a new stations\n</transcript>"))
+            return "Start a new session."
+        })
+        let result = try #require(delivered(await pipeline(transcript: "start a new stations", cleaner: cleaner)
+            .run(DictationInput(samples: speechSamples, context: context, settings: ChirpSettings()))))
+        #expect(result.cleanup == .used)
+        #expect(result.finalText == "Start a new session.")
     }
 
     @Test func rawStyleSkipsCleanup() async {
