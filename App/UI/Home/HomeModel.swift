@@ -41,13 +41,14 @@ final class HomeModel {
     var streak: String { stats.streakDays == 1 ? "1 day" : "\(stats.streakDays) days" }
 }
 
-enum TalkState: Equatable { case idle, recording, working, micOff, loading, blocked }
+enum TalkState: Equatable { case idle, recording, recordingPaused, working, micOff, loading, blocked }
 
 extension AppController {
     var talkState: TalkState {
         switch status {
         case .ready: .idle
         case .recording: recordingSource == .window ? .recording : .blocked
+        case .recordingPaused: recordingSource == .window ? .recordingPaused : .blocked
         case .working: recordingSource == .window ? .working : .blocked
         case .paused: .micOff
         case .starting, .loadingModels: .loading

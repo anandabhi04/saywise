@@ -7,6 +7,7 @@ final class BarModel {
     enum Phase: Equatable {
         case idle
         case listening(handsFree: Bool)
+        case recordingPaused
         case finishing
         case pasted
         case copied
@@ -82,8 +83,15 @@ struct FloatingBarView: View {
                     .padding(.horizontal, 4).padding(.vertical, 1)
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.white.opacity(0.5), lineWidth: 1))
                     .opacity(showEsc ? 0.5 : 0)
+                Color.clear.frame(width: 28)
             }
-            .frame(width: 184 - 28)
+            .frame(width: 184)
+        case .recordingPaused:
+            HStack(spacing: 9) {
+                StatusDot(color: .orange)
+                Text("Paused")
+                Color.clear.frame(width: 28)
+            }
         case .finishing:
             HStack(spacing: 9) { ProgressView().controlSize(.small).tint(.white); Text("Finishing") }
         case .pasted:

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Click toggles recording, drag moves the panel. AppKit handles the mouse so a drag never counts as a click.
 private final class FloatingBarHostView: NSView {
+    let pauseButton = NSButton()
     var onClick: () -> Void = {}
     var onMoved: (NSPoint) -> Void = { _ in }
     var onHover: (Bool) -> Void = { _ in }
@@ -12,7 +13,12 @@ private final class FloatingBarHostView: NSView {
     private var tracking: NSTrackingArea?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        guard bounds.contains(local) else { return nil }
+        if !pauseButton.isHidden, pauseButton.frame.contains(local) { return pauseButton }
+        return self
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -67,19 +73,20 @@ private final class FloatingBarPanel: NSPanel {
 }
 
 @MainActor
-final class FloatingBarController {
+final class FloatingBarController: NSObject {
     private static let centerKey = "floatingBarCenter"
     let model = BarModel()
     private let panel: FloatingBarPanel
     private let hosting: NSHostingView<FloatingBarView>
     private let glass = NSVisualEffectView()
+    private let host: FloatingBarHostView
     private weak var controller: AppController?
     private var flashTask: Task<Void, Never>?
     private var visible = false
 
     init(controller: AppController) {
         self.controller = controller
-        let host = FloatingBarHostView(frame: NSRect(x: 0, y: 0, width: 52, height: 34))
+        host = FloatingBarHostView(frame: NSRect(x: 0, y: 0, width: 52, height: 34))
         glass.material = .hudWindow
         glass.blendingMode = .behindWindow
         glass.state = .active
@@ -94,13 +101,27 @@ final class FloatingBarController {
         hosting.autoresizingMask = [.width, .height]
         hosting.layer?.backgroundColor = .clear
         host.addSubview(hosting)
+        host.pauseButton.isBordered = false
+        host.pauseButton.title = ""
+        host.pauseButton.imagePosition = .imageOnly
+        host.pauseButton.focusRingType = .none
+        host.pauseButton.contentTintColor = .white
+        host.pauseButton.action = #selector(toggleRecordingPause)
+        host.pauseButton.isHidden = true
+        host.addSubview(host.pauseButton)
         panel = FloatingBarPanel(content: host)
+        super.init()
+        host.pauseButton.target = self
         host.onClick = { [weak self] in self?.clicked() }
         host.onHover = { [weak self] in self?.model.hovering = $0 }
         host.onMoved = { [weak self] center in
             UserDefaults.standard.set(NSStringFromPoint(center), forKey: Self.centerKey)
             self?.layout()
         }
+    }
+
+    @objc private func toggleRecordingPause() {
+        controller?.toggleRecordingPause()
     }
 
     func setVisible(_ visible: Bool) {
@@ -132,12 +153,15 @@ final class FloatingBarController {
         flashTask?.cancel()
         guard let controller else { return }
         switch controller.status {
+        case .recording: model.phase = .listening(handsFree: controller.isHandsFree)
+        case .recordingPaused: model.phase = .recordingPaused
+        case .working: model.phase = .finishing
         case .paused: model.phase = .micOff
         case .starting, .loadingModels: model.phase = .loading
         default: model.phase = .idle
         }
         layout()
-        if !visible { panel.orderOut(nil) }
+        if !visible && isResting(model.phase) { panel.orderOut(nil) }
     }
 
     private func isResting(_ phase: BarModel.Phase) -> Bool {
@@ -154,7 +178,7 @@ final class FloatingBarController {
         case .loading:
             flash(.message("Getting ready · \(controller.modelProgressText)", isError: false), for: 2)
         case .finishing, .pasted: break
-        case .idle, .listening: controller.toggleRecording(from: .floatingButton)
+        case .idle, .listening, .recordingPaused: controller.toggleRecording(from: .floatingButton)
         }
     }
 
@@ -170,6 +194,13 @@ final class FloatingBarController {
         origin.x = min(max(origin.x, bounds.minX), bounds.maxX - size.width)
         origin.y = min(max(origin.y, bounds.minY), bounds.maxY - size.height)
         panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: false)
+        let paused = model.phase == .recordingPaused
+        let listening: Bool
+        if case .listening = model.phase { listening = true } else { listening = false }
+        host.pauseButton.isHidden = !paused && !listening
+        host.pauseButton.image = NSImage(systemSymbolName: paused ? "play.fill" : "pause.fill", accessibilityDescription: paused ? "Resume recording" : "Pause recording")
+        host.pauseButton.toolTip = paused ? "Resume recording" : "Pause recording"
+        host.pauseButton.frame = NSRect(x: size.width - 38, y: 5, width: 24, height: 24)
     }
 
     private func savedCenter() -> NSPoint? {

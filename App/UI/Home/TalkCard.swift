@@ -20,7 +20,7 @@ struct TalkCard: View {
 
     private var buttonState: RecordButtonState {
         switch controller.talkState {
-        case .idle: .idle; case .recording: .recording; case .working: .working
+        case .idle: .idle; case .recording, .recordingPaused: .recording; case .working: .working
         case .micOff, .loading, .blocked: .disabled
         }
     }
@@ -29,6 +29,7 @@ struct TalkCard: View {
         switch controller.talkState {
         case .idle: Text("Press to talk").font(.body).foregroundStyle(.secondary)
         case .recording: WaveView(levels: controller.bar.model.levels, barWidth: 3, maxHeight: 24).foregroundStyle(.primary)
+        case .recordingPaused: Text("Recording paused").font(.body).foregroundStyle(.secondary)
         case .working: Text("Finishing…").font(.body).foregroundStyle(.secondary)
         case .micOff: Text("Turn the mic on to talk").font(.body).foregroundStyle(.secondary)
         case .blocked: Text(" ").font(.body)

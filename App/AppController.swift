@@ -13,6 +13,7 @@ final class AppController {
         case loadingModels(String)
         case ready
         case recording
+        case recordingPaused
         case working
         case paused
         case failed(String)
@@ -56,6 +57,7 @@ final class AppController {
     @ObservationIgnored private var historyPurgeTimer: Task<Void, Never>?
     @ObservationIgnored private var recordingTranscription: RecordingTranscription?
     @ObservationIgnored private var recordingSettings: ChirpSettings?
+    @ObservationIgnored private var listeningTime = ListeningTime()
     @ObservationIgnored private var handsFreeTimer: Task<Void, Never>?
 
     init() {
@@ -177,10 +179,36 @@ final class AppController {
     /// Click to start, click again to stop. Used by the floating button and the main window.
     func toggleRecording(from source: RecordingSource) {
         switch status {
-        case .recording: stopRecording()
+        case .recording, .recordingPaused: stopRecording()
         case .ready: startRecording(from: source)
         case .loadingModels: bar.flash(.message("Getting ready · \(modelProgressText)", isError: false), for: 2)
         case .failed: bar.flash(.message("Saywise could not load its models", isError: true), for: 3)
+        default: break
+        }
+    }
+
+    func toggleRecordingPause() {
+        switch status {
+        case .recording:
+            handsFreeTimer?.cancel()
+            listeningTime.pause(at: ProcessInfo.processInfo.systemUptime)
+            let samples = recorder.stop()
+            if let transcription = recordingTranscription {
+                transcription.append(Array(samples.dropFirst(transcription.sampleCount)))
+            }
+            status = .recordingPaused
+            bar.show(.recordingPaused)
+        case .recordingPaused:
+            do {
+                try recorder.resume()
+            } catch {
+                bar.flash(.message("Microphone not available", isError: true), for: 3)
+                return
+            }
+            listeningTime.resume(at: ProcessInfo.processInfo.systemUptime)
+            status = .recording
+            bar.show(.listening(handsFree: lastHandsFree))
+            if recordingSource != .hotkey || machine.isHandsFree { scheduleHandsFreeTimeout() }
         default: break
         }
     }
@@ -207,6 +235,16 @@ final class AppController {
     // MARK: - Dictation
 
     private func handle(_ event: HotkeyEvent) {
+        if event == .escape, status == .recording || status == .recordingPaused {
+            machine = HotkeyStateMachine()
+            cancelRecording()
+            return
+        }
+        if case .keyDown = event, recordingSource != .hotkey,
+           status == .recording || status == .recordingPaused {
+            stopRecording()
+            return
+        }
         switch machine.handle(event) {
         case .start: startRecording(from: .hotkey)
         case .stop: stopRecording()
@@ -250,6 +288,8 @@ final class AppController {
                 transcriber: transcriber, language: settings.languageMode,
                 hints: WhisperHints.words(from: settings.dictionary))
         }
+        listeningTime = ListeningTime()
+        listeningTime.resume(at: ProcessInfo.processInfo.systemUptime)
         status = .recording
         recordingSource = source
         lastHandsFree = isHandsFree
@@ -259,8 +299,9 @@ final class AppController {
     }
 
     private func stopRecording() {
-        guard status == .recording, let transcriber, let cleaner else { return }
+        guard status == .recording || status == .recordingPaused, let transcriber, let cleaner else { return }
         handsFreeTimer?.cancel()
+        listeningTime.pause(at: ProcessInfo.processInfo.systemUptime)
         let samples = recorder.stop()
         let transcription = recordingTranscription
         recordingTranscription = nil
@@ -315,8 +356,9 @@ final class AppController {
     }
 
     private func cancelRecording() {
-        guard status == .recording else { return }
+        guard status == .recording || status == .recordingPaused else { return }
         handsFreeTimer?.cancel()
+        listeningTime = ListeningTime()
         recorder.cancel()
         recordingTranscription?.cancel()
         recordingTranscription = nil
@@ -356,8 +398,9 @@ final class AppController {
 
     private func scheduleHandsFreeTimeout() {
         handsFreeTimer?.cancel()
+        let remaining = listeningTime.remaining(at: ProcessInfo.processInfo.systemUptime)
         handsFreeTimer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(HotkeyStateMachine.handsFreeLimit))
+            try? await Task.sleep(for: .seconds(remaining))
             guard !Task.isCancelled, let self else { return }
             if self.recordingSource == .hotkey {
                 self.handle(.handsFreeTimeout)
@@ -453,6 +496,7 @@ final class AppController {
         case .starting, .loadingModels: "Getting ready"
         case .ready: "Ready"
         case .recording: "Listening"
+        case .recordingPaused: "Recording paused"
         case .working: "Finishing"
         case .paused: "Mic is off"
         case .failed: "Needs attention"
@@ -480,6 +524,7 @@ final class AppController {
         case .starting, .loadingModels: "arrow.down.circle"
         case .ready: "waveform"
         case .recording: "waveform.circle.fill"
+        case .recordingPaused: "pause.circle.fill"
         case .working: "ellipsis.circle"
         case .paused: "pause.circle"
         case .failed: "exclamationmark.triangle"

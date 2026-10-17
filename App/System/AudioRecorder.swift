@@ -12,7 +12,7 @@ final class AudioRecorder {
     var onSamples: (([Float]) -> Void)?
     private var recordingID = UUID()
 
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine?
     private let lock = NSLock()
     private var samples: [Float] = []
     private let target = AVAudioFormat(
@@ -20,9 +20,14 @@ final class AudioRecorder {
         channels: 1, interleaved: false)!
 
     func start() throws {
-        recordingID = UUID()
-        let id = recordingID
         lock.withLock { samples.removeAll(keepingCapacity: true) }
+        try resume()
+    }
+
+    func resume() throws {
+        let id = UUID()
+        lock.withLock { recordingID = id }
+        let engine = AVAudioEngine()
         let input = engine.inputNode
         // Read the format each time: it changes when the user switches mics.
         let format = input.outputFormat(forBus: 0)
@@ -34,18 +39,27 @@ final class AudioRecorder {
             self?.append(buffer, converter: converter, recordingID: id)
         }
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+            self.engine = engine
+        } catch {
+            input.removeTap(onBus: 0)
+            engine.stop()
+            throw error
+        }
     }
 
     func stop() -> [Float] {
-        recordingID = UUID()
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        lock.withLock { recordingID = UUID() }
+        engine?.inputNode.removeTap(onBus: 0)
+        engine?.stop()
+        engine = nil
         return lock.withLock { samples }
     }
 
     func cancel() {
         _ = stop()
+        lock.withLock { samples.removeAll() }
     }
 
     private func append(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter, recordingID: UUID) {
@@ -65,12 +79,17 @@ final class AudioRecorder {
         }
         guard error == nil, let data = output.floatChannelData?[0] else { return }
         let chunk = UnsafeBufferPointer(start: data, count: Int(output.frameLength))
-        lock.withLock { samples.append(contentsOf: chunk) }
+        let accepted = lock.withLock {
+            guard self.recordingID == recordingID else { return false }
+            samples.append(contentsOf: chunk)
+            return true
+        }
+        guard accepted else { return }
         let sum = chunk.reduce(Float(0)) { $0 + $1 * $1 }
         let rms = chunk.isEmpty ? 0 : (sum / Float(chunk.count)).squareRoot()
         let copied = Array(chunk)
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.recordingID == recordingID else { return }
+            guard let self, self.lock.withLock({ self.recordingID == recordingID }) else { return }
             self.onLevel?(rms)
             self.onSamples?(copied)
         }

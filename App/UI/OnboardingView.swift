@@ -42,7 +42,7 @@ struct OnboardingView: View {
         for p in [Permission.microphone, .inputMonitoring, .accessibility] where !p.isGranted { steps.append(.permission(p)) }
         if controller.settings.triggerKey == .fn { steps.append(.fnKey) }
         switch controller.status {
-        case .ready, .paused, .recording, .working: break
+        case .ready, .paused, .recording, .recordingPaused, .working: break
         default: steps.append(.download)
         }
         steps.append(.done)
