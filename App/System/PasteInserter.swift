@@ -17,16 +17,8 @@ struct PasteInserter: TextInserter {
             copy(text, to: pasteboard)
             return .copiedNoTextField
         }
-        let saved = ClipboardSnapshot(pasteboard)
         copy(text, to: pasteboard)
-        let ourChange = pasteboard.changeCount
         pressCommandV()
-        Task { @MainActor in
-            // The target app reads the clipboard after it handles Cmd+V.
-            try? await Task.sleep(for: .milliseconds(300))
-            // If the user copied something new meanwhile, keep theirs.
-            if pasteboard.changeCount == ourChange { saved.restore(to: pasteboard) }
-        }
         return .pasted
     }
 
@@ -44,28 +36,5 @@ struct PasteInserter: TextInserter {
         up?.flags = .maskCommand
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
-    }
-}
-
-/// Every item and type on the clipboard, so it can be put back after pasting.
-struct ClipboardSnapshot {
-    let items: [[NSPasteboard.PasteboardType: Data]]
-
-    init(_ pasteboard: NSPasteboard) {
-        items = (pasteboard.pasteboardItems ?? []).map { item in
-            Dictionary(uniqueKeysWithValues: item.types.compactMap { type in
-                item.data(forType: type).map { (type, $0) }
-            })
-        }
-    }
-
-    func restore(to pasteboard: NSPasteboard) {
-        pasteboard.clearContents()
-        let restored = items.map { types -> NSPasteboardItem in
-            let item = NSPasteboardItem()
-            for (type, data) in types { item.setData(data, forType: type) }
-            return item
-        }
-        if !restored.isEmpty { pasteboard.writeObjects(restored) }
     }
 }
